@@ -1,18 +1,30 @@
 {
   "name": "zxel",
   "version": "1.0.0-mashiro0",
-  "description": "",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "bin": {
-    "content2zxel": "./cli/content2zxel.js"
+    "content2zxel": "cli/content2zxel.js"
   },
   "author": "",
   "license": "MIT",
   "dependencies": {
     "command-line-args": "^5.2.0",
     "commander": "^8.3.0"
-  }
+  },
+  "directories": {
+    "test": "test"
+  },
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kmoon2437/zxel.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kmoon2437/zxel/issues"
+  },
+  "homepage": "https://github.com/kmoon2437/zxel#readme",
+  "description": ""
 }

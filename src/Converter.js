@@ -42,7 +42,7 @@ function parse_header(headers,copyright_protect = false){
 }
 
 function convert_line(line){
-    console.log(line.txt);
+    //console.log(line.txt);
     let gen = Parser.parse_sentence(line.txt);
     let syllables = gen.next().value; // 음절
     line.txt = gen.next().value; // 음절 구분용 슬래시(/)가 제거된 문장
@@ -62,7 +62,7 @@ function convert_line(line){
         while(old_data.length > slen){
             old_data.pop();
         }
-        console.log(old_data,syllables)
+        //console.log(old_data,syllables)
     }
     // 가사를 중간에 멈출 수 없도록 막음
     for(let i in old_data){ old_data[i].end = old_data[i-(-1)] ? old_data[i-(-1)].start : old_data[i].end; }
