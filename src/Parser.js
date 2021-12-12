@@ -6,6 +6,7 @@ const RUBY_BLOCK = { '{':'}','<':'>' };
 const FORCE_SPLIT = '/';
 const CONNECT_SYLLABLES = '.';
 const SPLIT_ALPHABET = '_';
+const ESCAPE = '\\';
 const SPACE_REGEX = /[\u0020\u00a0\u3000]+/g; // \u0020(일반 띄어쓰기)와 \u00a0(nbsp), \u3000(일본어 띄어쓰기(?))를 모두 인식
 const SPECIAL_CHARS = [FORCE_SPLIT,CONNECT_SYLLABLES,SPLIT_ALPHABET];
 const SPECIAL_CHARS2 = [CONNECT_SYLLABLES,SPLIT_ALPHABET];
@@ -154,10 +155,19 @@ module.exports = class Parser{
         }
         let str = '';
         let alphabet = true;
+        let is_escape = false;
+        let connect = false;
         let result = [];
         for(let i = 0;i < txt.length;i++){
             let chr = txt[i];
-            if(chr.match(SPACE_REGEX)){
+            if(is_escape){
+                is_escape = false;
+                str += chr;
+            }else if(chr == ESCAPE){
+                is_escape = true;
+            }else if(chr == CONNECT_SYLLABLES){
+                connect = true;
+            }else if(chr.match(SPACE_REGEX)){
                 if(str) result.push(str);
                 result.push(chr);
                 str = '';
@@ -188,22 +198,23 @@ module.exports = class Parser{
                     result.push(str);
                     str = '';
                 }
-                if(SPECIAL_CHARS3.indexOf(result[result.length-1]) >= 0) result[result.length-1] += chr;
+                if(SPECIAL_CHARS3.indexOf(result[result.length-1]) >= 0 || connect) result[result.length-1] += chr;
                 else result.push(chr);
+                connect = false;
             }
             //console.log('chr',chr,'/ i',i,'/ str',str,'/ alphabet',alphabet,'/ result',result);
         }
         if(str) result.push(str);
 
-        let final = [];
+        /*let final = [];
         let connect = false;
         result.forEach(a => {
             if(a == CONNECT_SYLLABLES) return connect = true;
             if(connect) final[final.length-1] += a;
             else final.push(a);
             connect = false;
-        });
-        return final;
+        });*/
+        return result;
     }
 
     static *parse_sentence(sentence){
@@ -223,7 +234,7 @@ module.exports = class Parser{
         }
     
         yield syllables; // 잘린 거
-        yield str_replace_all(sentence,SPECIAL_CHARS,''); // 원문에서 일부 변형한거
+        yield syllables.join('');
     }
 
     static parse_number(num){
