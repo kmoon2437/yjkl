@@ -37,16 +37,16 @@ File-mr: // 적당한 파일명을 지정하세요. 이 부분을 사용하지 �
 File-mv: // 적당한 파일명을 지정하세요. 이 부분을 사용하지 않는다면 지워도 좋습니다.
 
 c bpm 0 // 적당한 bpm을 지정하세요.`;
-let verse_ended = true;
+let verseEnded = true;
 
 for(let verse of input){
     let lines = verse.split('\n');
     for(let line of lines){
         let [ sentence,sub ] = line.split('::');
         let sentence2 = sentence.replace(PARAM_REGEX,'');
-        let syllables = Lyrics.Parser.parse_sentence(sentence2).next().value.filter(a => a.trim());
-        if(!verse_ended) output += '\nl';
-        verse_ended = false;
+        let syllables = Lyrics.Parser.parseSentence(sentence2).next().value.filter(a => a.trim());
+        if(!verseEnded) output += '\nl';
+        verseEnded = false;
         let matches;
         if(matches = sentence.match(PARAM_REGEX)){
             for(let raw of matches){
@@ -67,7 +67,7 @@ for(let verse of input){
         //output += '\n'+JSON.stringify(syllables)
     }
     output += '\nl 0';
-    verse_ended = true;
+    verseEnded = true;
 }
 
 fs.writeFileSync(outputfile,output,'utf8');

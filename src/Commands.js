@@ -1,4 +1,4 @@
-const parse_command = require('command-line-args');
+const parseCommand = require('command-line-args');
 
 var opts = {};
 
@@ -29,12 +29,12 @@ opts['delay'] = [];
 opts['delay_ms'] = [];
 
 module.exports = class Commands{
-    static parse(cmd_str){
+    static parse(cmdStr){
         // 명령어 이름을 없애고 파싱
         return {
-            name:cmd_str.split(/ +/g)[0],
-            opts:parse_command(opts[cmd_str.split(/ +/g)[0].toLowerCase()] || [],{
-                argv:cmd_str.split(/ +/g).slice(1),
+            name:cmdStr.split(/ +/g)[0],
+            opts:parseCommand(opts[cmdStr.split(/ +/g)[0].toLowerCase()] || [],{
+                argv:cmdStr.split(/ +/g).slice(1),
                 partial:true
             })
         };

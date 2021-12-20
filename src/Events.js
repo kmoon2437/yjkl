@@ -14,13 +14,7 @@ module.exports = class Events{
         else this._events[ms].push({ name:name,data:data });
     }
     
-    max_ms(){
-        var max = Math.max.apply(null,Object.keys(this._events));
-        if(!isFinite(max) || isNaN(max)) return 0;
-        return max;
-    }
-    
-    get_all(){
+    getAll(){
         return this._events;
     }
 }

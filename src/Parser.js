@@ -1,4 +1,5 @@
 const ALPHABETS = require('./alphabets'); // 영어,라틴문자,키릴문자,그리스문자 등등등
+const WIDTH_CONVERT_TABLE = require('./width_convert');
 const STRING_PLACEHOLDER = '\uf8ff';
 const STRABLE_CHARS = ["'",'"'];
 const BODY_BLOCK = { '[':']' };
@@ -7,13 +8,13 @@ const FORCE_SPLIT = '/';
 const CONNECT_SYLLABLES = '.';
 const SPLIT_ALPHABET = '_';
 const ESCAPE = '\\';
-const SPACE_REGEX = /[\u0020\u00a0\u3000]+/g; // \u0020(일반 띄어쓰기)와 \u00a0(nbsp), \u3000(일본어 띄어쓰기(?))를 모두 인식
+const SPACE_REGEX = /[\u0020\u00a0\u3000]+/g; // \u0020(일반 띄어쓰기)와 \u00a0(nbsp), \u3000(전각 띄어쓰기)를 모두 인식
 const SPECIAL_CHARS = [FORCE_SPLIT,CONNECT_SYLLABLES,SPLIT_ALPHABET];
 const SPECIAL_CHARS2 = [CONNECT_SYLLABLES,SPLIT_ALPHABET];
 const SPECIAL_CHARS3 = [...Object.keys(BODY_BLOCK),'('];
 const SPECIAL_CHARS4 = [...Object.values(BODY_BLOCK),')'];
 
-function remove_comments(str){
+function removeComments(str){
     var strings = [];
 
     str = str.replace(/"(?:[^"\n\\]*|\\[\S\s])*"|'(?:[^'\n\\]*|\\[\S\s])*'/g,(matched) => {
@@ -27,27 +28,27 @@ function remove_comments(str){
     return str.trim();
 }
 
-function str_reverse(str){
+function strReverse(str){
     return str.split('').reverse().join('');
 }
 
-function str_contains(str,a){
-    return str != str_replace_all(str,a,'');
+function strContains(str,a){
+    return str != strReplaceAll(str,a,'');
 }
 
-function str_replace_all(str,a,b){
+function strReplaceAll(str,a,b){
     if(a instanceof Array && !(b instanceof Array)){
         for(let s of a){
-            str = str_replace_all(str,s,b);
+            str = strReplaceAll(str,s,b);
         }
     }else if(b instanceof Array && !(a instanceof Array)){
         for(let s of b){
-            str = str_replace_all(str,a,s);
+            str = strReplaceAll(str,a,s);
         }
     }else if(a instanceof Array && b instanceof Array){
         let cnt = Math.max(a.length,b.length);
         for(let i = 0;i < cnt;i++){
-            str = str_replace_all(str,a[Math.min(i,a.length-1)],b[Math.min(i,b.length-1)]);
+            str = strReplaceAll(str,a[Math.min(i,a.length-1)],b[Math.min(i,b.length-1)]);
         }
     }else{
         while(str.indexOf(a) > -1){
@@ -69,7 +70,7 @@ module.exports = class Parser{
 
     static parse(data){
         // 주석 제거
-        data = remove_comments(data.replace(/\r\n/g,'\n').replace(/\r/g,'\n'));
+        data = removeComments(data.replace(/\r\n/g,'\n').replace(/\r/g,'\n'));
         
         // header와 content로 분리
         data = data.trim().split(/\n\n+/g);
@@ -92,10 +93,10 @@ module.exports = class Parser{
             hh.shift();
             var val = hh.join(':');
             let str = val.trim();
-            let str_first = str.split('')[0];
-            let str_last = str.split('').reverse()[0];
+            let strFirst = str.split('')[0];
+            let strLast = str.split('').reverse()[0];
             for(let c of STRABLE_CHARS){
-                if(str_first == c && str_last == c){
+                if(strFirst == c && strLast == c){
                     str = str.split('');
                     str.pop();
                     str.shift();
@@ -123,7 +124,7 @@ module.exports = class Parser{
                 break;
                 case 'l':
                     cmd.end = cc[0] ? true : false;
-                    cmd.end_time = cc[0];
+                    cmd.endTime = cc[0];
                 break;
                 case 's':
                     cmd.sentence = cc.join(' ');
@@ -133,7 +134,7 @@ module.exports = class Parser{
                     cmd.sentence = cc.join(' ');
                 break;
                 case 'p':
-                    cmd.typecode = Parser.parse_number(cc[0]);
+                    cmd.typecode = Parser.parseNumber(cc[0]);
                 break;
             }
             commands.push(cmd);
@@ -142,29 +143,29 @@ module.exports = class Parser{
         return { headers,commands };
     }
 
-    static is_ruby(sentence){
-        let a = Parser.parse_ruby_syntax(sentence);
+    static isRuby(sentence){
+        let a = Parser.parseRubySyntax(sentence);
         return !!a.map(e => e[1]).join('');
     }
     
     // 슬래시 없이 자동 음절 구분 기능에 의존하는 경우
-    static split_sentence(txt){
+    static splitSentence(txt){
         let m = {
             CUT:0,
             MERGE:1
         }
         let str = '';
         let alphabet = true;
-        let is_escape = false;
+        let isEscape = false;
         let connect = false;
         let result = [];
         for(let i = 0;i < txt.length;i++){
             let chr = txt[i];
-            if(is_escape){
-                is_escape = false;
+            if(isEscape){
+                isEscape = false;
                 str += chr;
             }else if(chr == ESCAPE){
-                is_escape = true;
+                isEscape = true;
             }else if(chr == CONNECT_SYLLABLES){
                 connect = true;
             }else if(chr.match(SPACE_REGEX)){
@@ -217,11 +218,17 @@ module.exports = class Parser{
         return result;
     }
 
-    static *parse_sentence(sentence){
+    static *parseSentence(sentence){
         sentence = sentence.replace(SPACE_REGEX,' '); // 띄어쓰기가 여러개 있던걸 한개로 변환
+        
+        // 전각<->반각 간 변환
+        for(let i in WIDTH_CONVERT_TABLE){
+            sentence = strReplaceAll(sentence,i,WIDTH_CONVERT_TABLE[i]);
+        }
+        
         let syllables;
         if(sentence.match(FORCE_SPLIT)){
-            sentence = str_replace_all(sentence,SPECIAL_CHARS2,'')
+            sentence = strReplaceAll(sentence,SPECIAL_CHARS2,'')
             .replace(new RegExp(`${FORCE_SPLIT}+`,'g'),FORCE_SPLIT);
             syllables = sentence
             .split(FORCE_SPLIT)
@@ -230,14 +237,14 @@ module.exports = class Parser{
             .map((a,i) => i == 0 ? a : [' ',a])
             .flat()).flat();
         }else{
-            syllables = Parser.split_sentence(sentence);
+            syllables = Parser.splitSentence(sentence);
         }
     
         yield syllables; // 잘린 거
         yield syllables.join('');
     }
 
-    static parse_number(num){
+    static parseNumber(num){
         if(typeof num == 'number') return num;
         else if(typeof num == 'string'){
             if(isNaN(Number(num))) return eval(num);
@@ -245,20 +252,20 @@ module.exports = class Parser{
         }else return 0;
     }
 
-    static parse_timing(time){
+    static parseTiming(time){
         time = time.split(':');
         let timing = {};
-        timing.start = Parser.parse_number(time[0]);
-        if(time[1]) timing.end = Parser.parse_number(time[1]);
+        timing.start = Parser.parseNumber(time[0]);
+        if(time[1]) timing.end = Parser.parseNumber(time[1]);
         else timing.end = null;
 
         return timing;
     }
 
-    static parse_time(time,bpm = 120,ticks_per_beat = 960){
+    static parseTime(time,bpm = 120,ticksPerBeat = 960){
         if(typeof time == 'number'){
             return {
-                ms:60000/bpm*(parseFloat(Parser.parse_number(time))/ticks_per_beat),
+                ms:60000/bpm*(parseFloat(Parser.parseNumber(time))/ticksPerBeat),
                 stakato:false
             };
         }else if(typeof time == 'string'){
@@ -271,9 +278,9 @@ module.exports = class Parser{
                 tick2.shift();
                 tick = tick2.join('');
             }
-            var beat = parseFloat(Parser.parse_number(tick))/ticks_per_beat;
+            var beat = parseFloat(Parser.parseNumber(tick))/ticksPerBeat;
             parsed.ms = 60000/bpm*beat;
-            if(ms) parsed.ms += parseFloat(Parser.parse_number(ms));
+            if(ms) parsed.ms += parseFloat(Parser.parseNumber(ms));
             return parsed;
         }else return {
             ms:0,
@@ -281,23 +288,23 @@ module.exports = class Parser{
         };
     }
 
-    static stringify_ruby_syntax(blocks){
-        let line_str = '';
+    static stringifyRubySyntax(blocks){
+        let lineStr = '';
         for(let el of blocks){
-            if(el[1]) line_str += `[${el[0]}]<${el[1]}>`;
-            else line_str += el[0];
+            if(el[1]) lineStr += `[${el[0]}]<${el[1]}>`;
+            else lineStr += el[0];
         }
 
-        return line_str;
+        return lineStr;
     }
 
-    static parse_ruby_syntax(text){
+    static parseRubySyntax(text){
         //this.status = [];
         let blocks = [];
         let status = {
             body:'',
             ruby:'',
-            body_block_closed:false
+            bodyBlockClosed:false
         };
         let data = {
             body:'',
@@ -314,19 +321,19 @@ module.exports = class Parser{
                 data.ruby = '';
             }else if(chr == BODY_BLOCK[status.body]){
                 status.body = '';
-                status.body_block_closed = true;
+                status.bodyBlockClosed = true;
             }else if(RUBY_BLOCK[chr]){
                 if(status.ruby) throw new SyntaxError(`Already opened the ruby block at position ${i} (character: '${chr}')`);
                 if(status.body) throw new SyntaxError(`Already opened the body block at position ${i} (character: '${chr}')`);
                 if(i == 0) throw new SyntaxError(`Invalid syntax at position ${i} (character: '${chr}')`);
-                if(!status.body_block_closed){
+                if(!status.bodyBlockClosed){
                     let str = data.body.slice(0,data.body.length-1);
                     data.body = data.body[data.body.length-1];
                     blocks.push([str,'']);
                 }
-                status.body_block_closed = false;
+                status.bodyBlockClosed = false;
                 status.ruby = chr;
-            }else if(status.body_block_closed){
+            }else if(status.bodyBlockClosed){
                 throw new SyntaxError(`Invalid syntax at position ${i} (character: '${chr}')`);
             }else if(chr == RUBY_BLOCK[status.ruby]){
                 status.ruby = '';

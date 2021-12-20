@@ -4,12 +4,12 @@ const Commands = require('./Commands');
 
 const STAKATO_TIME = 10;
 
-function clone_object(obj){
+function cloneObject(obj){
     var newobj = {};
     for(var i in obj){
         if(typeof obj[i] == 'object'){
             if(obj[i] instanceof Array) newobj[i] = [...obj[i]];
-            else newobj[i] = clone_object(obj[i]);
+            else newobj[i] = cloneObject(obj[i]);
         }
         else newobj[i] = obj[i];
     }
@@ -17,16 +17,16 @@ function clone_object(obj){
     return newobj;
 }
 
-function parse_header(headers,copyright_protect = false){
-    var headers = clone_object(headers);
+function parseHeader(headers,copyrightProtect = false){
+    var headers = cloneObject(headers);
     var parsed = {
         files:{},
         meta:{},
-        other_headers:null
+        otherHeaders:null
     };
 
     for(var i in headers){
-        if(copyright_protect ? i.match(/^\@file-/g) : i.match(/^file-/g)){
+        if(copyrightProtect ? i.match(/^\@file-/g) : i.match(/^file-/g)){
             parsed.files[i.replace(/(@?)file-/i,'')] = headers[i];
             delete headers[i];
         }
@@ -36,55 +36,55 @@ function parse_header(headers,copyright_protect = false){
         }
     }
 
-    parsed.other_headers = headers;
+    parsed.otherHeaders = headers;
 
     return parsed;
 }
 
-function convert_line(line){
+function convertLine(line){
     //console.log(line.txt);
-    let gen = Parser.parse_sentence(line.txt);
+    let gen = Parser.parseSentence(line.txt);
     let syllables = gen.next().value; // 음절
     line.txt = gen.next().value; // 음절 구분용 슬래시(/)가 제거된 문장
     //console.log(syllables,line.txt);
-    let line_data = [];
-    let old_data = [...line.data];
-    if(old_data.length < syllables.filter(a => a.trim()).length){
+    let lineData = [];
+    let oldData = [...line.data];
+    if(oldData.length < syllables.filter(a => a.trim()).length){
         // 추가로 넣어야 할 타이밍 이벤트의 수
-        let cnt = syllables.length-old_data.length+1;
-        let event = old_data.pop();
+        let cnt = syllables.length-oldData.length+1;
+        let event = oldData.pop();
         let duration = (event.end-event.start)/cnt;
         let ptime = event.start;
-        for(let i = 0;i < cnt;i++) old_data.push(new TimingEvent(Math.round(ptime+duration*i),Math.round(ptime+duration*(i+1)),event.current_bpm));
-    }else if(old_data.length > syllables.filter(a => a.trim()).length){
+        for(let i = 0;i < cnt;i++) oldData.push(new TimingEvent(Math.round(ptime+duration*i),Math.round(ptime+duration*(i+1)),event.currentBPM));
+    }else if(oldData.length > syllables.filter(a => a.trim()).length){
         let slen = syllables.filter(a => a.trim()).length;
-        old_data[slen-1].end = old_data.pop().end;
-        while(old_data.length > slen){
-            old_data.pop();
+        oldData[slen-1].end = oldData.pop().end;
+        while(oldData.length > slen){
+            oldData.pop();
         }
-        //console.log(old_data,syllables)
+        //console.log(oldData,syllables)
     }
     // 가사를 중간에 멈출 수 없도록 막음
-    for(let i in old_data){ old_data[i].end = old_data[i-(-1)] ? old_data[i-(-1)].start : old_data[i].end; }
+    for(let i in oldData){ oldData[i].end = oldData[i-(-1)] ? oldData[i-(-1)].start : oldData[i].end; }
     for(let i in syllables){
         if(syllables[i] == ' '){
-            line_data.push({
+            lineData.push({
                 text:' ',
-                start:line_data[line_data.length-1].end,
-                end:line_data[line_data.length-1].end
+                start:lineData[lineData.length-1].end,
+                end:lineData[lineData.length-1].end
             });
         }else{
             try{
-                let block = old_data.shift();
+                let block = oldData.shift();
                 block.text = syllables[i];
-                line_data.push(block);
+                lineData.push(block);
             }catch(e){
                 console.log(syllables,line.txt);
                 throw e;
             }
         }
     }
-    line.data = line_data;
+    line.data = lineData;
     return line;
 }
 
@@ -96,7 +96,7 @@ class LineSeparate{
 class VerseSeparate{
     constructor(ms){
         this.name = 'VerseSeparate';
-        this.hide_delay = ms;
+        this.hideDelay = ms;
     }
 }
 class SetLineProperty{
@@ -114,19 +114,19 @@ class SetVerseProperty{
     }
 }
 class TimingEvent{
-    constructor(start,end,current_bpm){
+    constructor(start,end,currentBPM){
         //this.length = length;
         this.start = start;
         this.end = end;
-        this.current_bpm = current_bpm;
+        this.currentBPM = currentBPM;
     }
 }
 
 module.exports = class Converter{
-    static parse_command_with_tick_duration(commands,headers){
+    static parseCommandWithTickDuration(commands,headers){
         var bpm = 120;
-        var string_events = [];
-        var ticks_per_beat = headers.meta['ticks-per-beat'] || 120;
+        var stringEvents = [];
+        var ticksPerBeat = headers.meta['ticks-per-beat'] || 120;
         var playtime = 0;
         for(var cmd of commands){
             switch(cmd.type.toLowerCase()){
@@ -135,242 +135,242 @@ module.exports = class Converter{
                     let { _unknown:args } = opts;
                     switch(name.toLowerCase()){
                         case 'bpm':{
-                            bpm = Parser.parse_number(args[0]);
+                            bpm = Parser.parseNumber(args[0]);
                         }break;
                         case 'show':{
-                            string_events.push(new SetVerseProperty('wait_time',Parser.parse_time(args[0],bpm,ticks_per_beat).ms));
+                            stringEvents.push(new SetVerseProperty('waitTime',Parser.parseTime(args[0],bpm,ticksPerBeat).ms));
                         }break;
                         case 'count':{
-                            string_events.push(new SetVerseProperty('count',parseInt(args[0],10)));
+                            stringEvents.push(new SetVerseProperty('count',parseInt(args[0],10)));
                         }break;
                         case 'delay':{
-                            playtime += Parser.parse_time(args[0],bpm,ticks_per_beat).ms;
+                            playtime += Parser.parseTime(args[0],bpm,ticksPerBeat).ms;
                         }break;
                         case 'delay_ms':{
-                            playtime += Parser.parse_number(args[0]);
+                            playtime += Parser.parseNumber(args[0]);
                         }break;
                     }
                 }break;
                 case 't':{
                     cmd.timings.forEach(time => {
                         let start = playtime;
-                        let parsed = Parser.parse_time(time,bpm,ticks_per_beat);
+                        let parsed = Parser.parseTime(time,bpm,ticksPerBeat);
                         playtime += parsed.ms;
                         let end = parsed.stakato ? start+STAKATO_TIME : playtime;
-                        string_events.push(new TimingEvent(Math.round(start),Math.round(end),bpm));
+                        stringEvents.push(new TimingEvent(Math.round(start),Math.round(end),bpm));
                     });
                 }break;
                 case 'l':{
                     if(cmd.end){
-                        let end_time = cmd.end_time == '-' ? 0 : cmd.end_time;
-                        string_events.push(new VerseSeparate((typeof cmd.end_time != 'undefined')
-                        ? Parser.parse_time(end_time,bpm,ticks_per_beat).ms : 0));
+                        let endTime = cmd.endTime == '-' ? 0 : cmd.endTime;
+                        stringEvents.push(new VerseSeparate((typeof cmd.endTime != 'undefined')
+                        ? Parser.parseTime(endTime,bpm,ticksPerBeat).ms : 0));
                     }else{
-                        string_events.push(new LineSeparate());
+                        stringEvents.push(new LineSeparate());
                     }
                 }break;
                 case 's':{
-                    string_events.push(new SetLineProperty('txt',cmd.sentence));
+                    stringEvents.push(new SetLineProperty('txt',cmd.sentence));
                 }break;
                 case 'u':{
-                    string_events.push(new SetLineProperty('sub',cmd.sentence));
+                    stringEvents.push(new SetLineProperty('sub',cmd.sentence));
                 }break;
                 case 'p':{
-                    string_events.push(new SetLineProperty('type',cmd.typecode));
+                    stringEvents.push(new SetLineProperty('type',cmd.typecode));
                 }break;
             }
         }
 
-        return string_events;
+        return stringEvents;
     }
 
-    static convert(data,copyright_protect = false){
+    static convert(data,copyrightProtect = false){
         var { headers,commands } = Parser.parse(data);
-        var parsed_headers = parse_header(headers,copyright_protect);
+        var parsedHeaders = parseHeader(headers,copyrightProtect);
         var events = new Events();
-        var string_events = null;
+        var stringEvents = null;
         var verses = [];
 
-        switch(parsed_headers.meta['timing-type']){
+        switch(parsedHeaders.meta['timing-type']){
             case 'tick-duration':{
-                string_events = this.parse_command_with_tick_duration(commands,parsed_headers);
+                stringEvents = this.parseCommandWithTickDuration(commands,parsedHeaders);
             }break;
             case 'ms-timing':{
-                string_events = this.parse_command_with_ms_timing(commands,parsed_headers);
+                stringEvents = this.parseCommandWithMsTiming(commands,parsedHeaders);
             }break;
             default:{
-                string_events = this.parse_command_with_tick_duration(commands,parsed_headers);
+                stringEvents = this.parseCommandWithTickDuration(commands,parsedHeaders);
             }break;
         }
 
         if(true){
             let first = true;
-            let initial_verse = {
-                start_bpm:120,
-                on_end_hide_delay:0,
+            let initialVerse = {
+                startBPM:120,
+                onEndHideDelay:0,
                 lines:[]
             };
-            let initial_line = {
+            let initialLine = {
                 type:0,
                 sub:'',
                 data:[],
                 txt:''
             };
-            let verse = clone_object(initial_verse);
-            let line = clone_object(initial_line);
+            let verse = cloneObject(initialVerse);
+            let line = cloneObject(initialLine);
 
-            for(var event of string_events){
+            for(var event of stringEvents){
                 if(event instanceof LineSeparate){
-                    verse.lines.push(convert_line(line));
-                    line = clone_object(initial_line);
+                    verse.lines.push(convertLine(line));
+                    line = cloneObject(initialLine);
                 }else if(event instanceof VerseSeparate){
                     first = true;
-                    verse.lines.push(convert_line(line));
-                    line = clone_object(initial_line);
-                    verse.on_end_hide_delay = event.hide_delay;
+                    verse.lines.push(convertLine(line));
+                    line = cloneObject(initialLine);
+                    verse.onEndHideDelay = event.hideDelay;
                     verses.push(verse);
-                    verse = clone_object(initial_verse);
+                    verse = cloneObject(initialVerse);
                 }else if(event instanceof SetLineProperty){
                     line[event.key] = event.val;
                 }else if(event instanceof SetVerseProperty){
                     verse[event.key] = event.val;
                 }else if(event instanceof TimingEvent){
                     if(first){
-                        verse.start_bpm = event.current_bpm;
+                        verse.startBPM = event.currentBPM;
                         first = false;
                     }
                     line.data.push(event);
                 }
             }
             if(line.data.length){
-                verse.lines.push(convert_line(line));
-                line = clone_object(initial_line);
+                verse.lines.push(convertLine(line));
+                line = cloneObject(initialLine);
             }
 
             if(verse.lines.length){
                 first = true;
                 if(line.length) verse.lines.data.push(line);
 
-                line = clone_object(initial_line);
+                line = cloneObject(initialLine);
                 verses.push(verse);
             }
         }
 
-        var last_end_time = 0;
-        var verse_ranges = [];
+        var lastEndTime = 0;
+        var verseRanges = [];
         var first = true;
         for(var verse of verses){
-            let start_count = 4;
-            let start_time = verse.lines[0].data[0].start;
-            let ganju_duration = verse.lines[0].data[0].start-last_end_time;
-            let beat = 60000/verse.start_bpm;
-            let verse_range = [0,0];
-            let beat_base = 60000/190;
-            if(ganju_duration <= beat*20 && ganju_duration <= beat_base*20) start_count = 3;
-            if(ganju_duration <= beat*15 && ganju_duration <= beat_base*15) start_count = 2;
-            if(ganju_duration <= beat*10 && ganju_duration <= beat_base*10) start_count = 1;
-            if(ganju_duration <= beat*4) start_count = 0;
-            let first_render = start_time;
+            let startCount = 4;
+            let startTime = verse.lines[0].data[0].start;
+            let ganjuDuration = verse.lines[0].data[0].start-lastEndTime;
+            let beat = 60000/verse.startBPM;
+            let verseRange = [0,0];
+            let beatBase = 60000/190;
+            if(ganjuDuration <= beat*20 && ganjuDuration <= beatBase*20) startCount = 3;
+            if(ganjuDuration <= beat*15 && ganjuDuration <= beatBase*15) startCount = 2;
+            if(ganjuDuration <= beat*10 && ganjuDuration <= beatBase*10) startCount = 1;
+            if(ganjuDuration <= beat*4) startCount = 0;
+            let firstRender = startTime;
 
             let bottom = false;
             if(verse.lines.length < 2) bottom = true;
-            start_count = Math.round(Math.max(0,Math.min(verse.count,4))) || start_count;
-            for(var i = 1;i <= start_count;i++){
-                events.add(start_time-(beat*i),'countdown',{ val:i,bottom });
-                first_render = Math.min(first_render,start_time-(beat*i));
+            startCount = Math.round(Math.max(0,Math.min(verse.count,4))) || startCount;
+            for(var i = 1;i <= startCount;i++){
+                events.add(startTime-(beat*i),'countdown',{ val:i,bottom });
+                firstRender = Math.min(firstRender,startTime-(beat*i));
             }
 
-            for(var i = 1;i <= Math.max(0,4-start_count);i++){
-                events.add(first_render-i*10,'countdown',{ val:i-start_count,bottom });
+            for(var i = 1;i <= Math.max(0,4-startCount);i++){
+                events.add(firstRender-i*10,'countdown',{ val:i-startCount,bottom });
             }
-            events.add(start_time,'countdown',{ val:null,bottom });
-            let initial_minus = 200;
-            let minus = initial_minus;
-            if(ganju_duration > 25000 && first) minus = Math.min(6000,ganju_duration/2);
-            if(verse.wait_time) minus = Math.max(verse.wait_time,initial_minus);
-            first_render = Math.max(first_render-minus,0);
-            verse_range[0] = first_render-10;
+            events.add(startTime,'countdown',{ val:null,bottom });
+            let initialMinus = 200;
+            let minus = initialMinus;
+            if(ganjuDuration > 25000 && first) minus = Math.min(6000,ganjuDuration/2);
+            if(verse.waitTime) minus = Math.max(verse.waitTime,initialMinus);
+            firstRender = Math.max(firstRender-minus,0);
+            verseRange[0] = firstRender-10;
 
             if(verse.lines.length < 2){
-                events.add(first_render,'renderlyrics',{
-                    line_code:'b',
+                events.add(firstRender,'renderlyrics',{
+                    lineCode:'b',
                     data:verse.lines[0]
                 });
-                verse_range[1] = (verse.lines[0].data[verse.lines[0].data.length-1].end+verse.on_end_hide_delay)+10;
-                events.add(last_end_time = verse.lines[0].data[verse.lines[0].data.length-1].end+verse.on_end_hide_delay,'hidelyrics',{});
+                verseRange[1] = (verse.lines[0].data[verse.lines[0].data.length-1].end+verse.onEndHideDelay)+10;
+                events.add(lastEndTime = verse.lines[0].data[verse.lines[0].data.length-1].end+verse.onEndHideDelay,'hidelyrics',{});
             }else{
-                events.add(first_render,'renderlyrics',{
-                    line_code:'a',
+                events.add(firstRender,'renderlyrics',{
+                    lineCode:'a',
                     data:verse.lines[0]
                 });
-                events.add(first_render+125,'renderlyrics',{
-                    line_code:'b',
+                events.add(firstRender+125,'renderlyrics',{
+                    lineCode:'b',
                     data:verse.lines[1]
                 });
                 let lines = [...verse.lines];
                 lines.shift();
 
                 let first = true;
-                let line_code = true; // true:a,false:b
+                let lineCode = true; // true:a,false:b
                 for(var i in lines){
                     if(first){ first = false; continue; }
                     if(!lines[i-1].data.length) continue;
                     events.add(lines[i-1].data[0].start+(lines[i-1].data[0].end-lines[i-1].data[0].start)/2,'renderlyrics',{
-                        line_code:line_code ? 'a' : 'b',
+                        lineCode:lineCode ? 'a' : 'b',
                         data:lines[i]
                     });
-                    line_code = !line_code;
+                    lineCode = !lineCode;
                 }
-                let end_time = last_end_time = [...([...verse.lines].reverse()[0]).data].reverse()[0].end+verse.on_end_hide_delay;
-                events.add(end_time,'hidelyrics',{});
-                verse_range[1] = end_time;
+                let endTime = lastEndTime = [...([...verse.lines].reverse()[0]).data].reverse()[0].end+verse.onEndHideDelay;
+                events.add(endTime,'hidelyrics',{});
+                verseRange[1] = endTime;
             }
-            verse_ranges.push(verse_range);
+            verseRanges.push(verseRange);
             first = false;
         }
 
         if(true){
-            let keys = Object.keys(events.get_all());
+            let keys = Object.keys(events.getAll());
             let firsteventtime = Math.min(...keys);
             firsteventtime = Math.max(firsteventtime-1600,0);
             events.add(Math.min(10000,firsteventtime),'cleangui',{},true);
             events.add(0,'hidelyrics',{},true);
         }
 
-        parsed_headers.media = '';
-        if(parsed_headers.files.zk || parsed_headers.files.midi){
-            if(parsed_headers.files.zk){
-                parsed_headers.media += 'zk';
-            }else if(parsed_headers.files.midi){
-                parsed_headers.media += 'midi';
+        parsedHeaders.media = '';
+        if(parsedHeaders.files.zk || parsedHeaders.files.midi){
+            if(parsedHeaders.files.zk){
+                parsedHeaders.media += 'zk';
+            }else if(parsedHeaders.files.midi){
+                parsedHeaders.media += 'midi';
             }
-            parsed_headers.media += '-';
-            if(parsed_headers.files.mv){
-                parsed_headers.media += 'mv';
+            parsedHeaders.media += '-';
+            if(parsedHeaders.files.mv){
+                parsedHeaders.media += 'mv';
             }else{
-                parsed_headers.media += 'only';
+                parsedHeaders.media += 'only';
             }
         }else{
-            if(parsed_headers.files.mr && parsed_headers.files.mv){
-                parsed_headers.media = 'mr-mv';
-            }else if(parsed_headers.files.mr && !parsed_headers.files.mv){
-                parsed_headers.media = 'mr-only';
-            }else if(!parsed_headers.files.mr && parsed_headers.files.mv){
-                parsed_headers.media = 'mv-only';
+            if(parsedHeaders.files.mr && parsedHeaders.files.mv){
+                parsedHeaders.media = 'mr-mv';
+            }else if(parsedHeaders.files.mr && !parsedHeaders.files.mv){
+                parsedHeaders.media = 'mr-only';
+            }else if(!parsedHeaders.files.mr && parsedHeaders.files.mv){
+                parsedHeaders.media = 'mv-only';
             }
         }
 
-        if(parsed_headers.media == 'zk-mv' || parsed_headers.media == 'midi-mv' || parsed_headers.media == 'mr-mv'){
-            let time = parsed_headers.other_headers['mv-timing'] || 0;
+        if(parsedHeaders.media == 'zk-mv' || parsedHeaders.media == 'midi-mv' || parsedHeaders.media == 'mr-mv'){
+            let time = parsedHeaders.otherHeaders['mv-timing'] || 0;
             events.add(time,'playmv',{},true);
         }
 
         return {
-            headers:parsed_headers,
-            raw_headers:headers,
-            events:events.get_all(),
+            headers:parsedHeaders,
+            rawHeaders:headers,
+            events:events.getAll(),
             verses:verses,
-            verse_ranges,commands
+            verseRanges,commands
         };
     }
 }
