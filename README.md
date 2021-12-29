@@ -1,2 +1,2 @@
-# zxel
-zxel(**ZXE**Karaoke **L**yrics) parser
+# yjkl
+yjkl(**YJK**araoke **L**yrics) parser

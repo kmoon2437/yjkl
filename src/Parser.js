@@ -221,11 +221,6 @@ module.exports = class Parser{
     static *parseSentence(sentence){
         sentence = sentence.replace(SPACE_REGEX,' '); // 띄어쓰기가 여러개 있던걸 한개로 변환
         
-        // 전각<->반각 간 변환
-        for(let i in WIDTH_CONVERT_TABLE){
-            sentence = strReplaceAll(sentence,i,WIDTH_CONVERT_TABLE[i]);
-        }
-        
         let syllables;
         if(sentence.match(FORCE_SPLIT)){
             sentence = strReplaceAll(sentence,SPECIAL_CHARS2,'')
@@ -239,6 +234,13 @@ module.exports = class Parser{
         }else{
             syllables = Parser.splitSentence(sentence);
         }
+        
+        // 전각<->반각 간 변환
+        syllables = syllables.map(a => {
+            for(let i in WIDTH_CONVERT_TABLE){
+                return strReplaceAll(a,i,WIDTH_CONVERT_TABLE[i]);
+            }
+        });
     
         yield syllables; // 잘린 거
         yield syllables.join('');
