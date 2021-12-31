@@ -338,9 +338,9 @@ module.exports = class Converter{
         }
 
         parsedHeaders.media = '';
-        if(parsedHeaders.files.zk || parsedHeaders.files.midi){
-            if(parsedHeaders.files.zk){
-                parsedHeaders.media += 'zk';
+        if(parsedHeaders.files.yjk || parsedHeaders.files.midi){
+            if(parsedHeaders.files.yjk){
+                parsedHeaders.media += 'yjk';
             }else if(parsedHeaders.files.midi){
                 parsedHeaders.media += 'midi';
             }
@@ -360,7 +360,7 @@ module.exports = class Converter{
             }
         }
 
-        if(parsedHeaders.media == 'zk-mv' || parsedHeaders.media == 'midi-mv' || parsedHeaders.media == 'mr-mv'){
+        if(parsedHeaders.media == 'yjk-mv' || parsedHeaders.media == 'midi-mv' || parsedHeaders.media == 'mr-mv'){
             let time = parsedHeaders.otherHeaders['mv-timing'] || 0;
             events.add(time,'playmv',{},true);
         }
