@@ -131,7 +131,6 @@ module.exports = class Parser{
                 break;
                 case 's':
                     cmd.sentence = cc.join(' ');
-                    //console.log(cc)
                 break;
                 case 'u':
                     cmd.sentence = cc.join(' ');
@@ -223,7 +222,6 @@ module.exports = class Parser{
             }
         }
         if(str) result.push(str);
-        //console.log(result)
         
         let connectAfter = true;
         return result.reduce((a,b,i) => {
@@ -284,7 +282,7 @@ module.exports = class Parser{
                 connectAfter = false;
             }
             return a;
-        },[[]]).filter(a => a.length);
+        },[[]]).filter(a => a.length).map(a => a.filter(s => !(s instanceof Array)));
     }
 
     static parseSentence(sentence){
@@ -380,7 +378,7 @@ module.exports = class Parser{
                 if(status.ruby) throw new SyntaxError(`Already opened the ruby block at position ${i} (character: '${chr}')`);
                 status.body = chr;
                 //blocks.push([data.body,data.ruby]);
-                blocks.push({ ruby:data.ruby,length:data.body.length },data.body);
+                blocks.push({ ruby:data.ruby,length:strReplaceAll(data.body,SPECIAL_CHARS,'').length },data.body);
                 data.body = '';
                 data.ruby = '';
             }else if(chr == BODY_BLOCK[status.body]){
@@ -403,7 +401,7 @@ module.exports = class Parser{
             }else if(chr == RUBY_BLOCK[status.ruby]){
                 status.ruby = '';
                 //blocks.push([data.body,data.ruby]);
-                blocks.push({ ruby:data.ruby,length:data.body.length },data.body);
+                blocks.push({ ruby:data.ruby,length:strReplaceAll(data.body,SPECIAL_CHARS,'').length },data.body);
                 data.body = '';
                 data.ruby = '';
             }else{
@@ -417,7 +415,7 @@ module.exports = class Parser{
         }
         if(data.body){
             //blocks.puash([data.body,data.ruby]);
-            if(data.ruby) blocks.push({ ruby:data.ruby,length:data.body.length },data.body);
+            if(data.ruby) blocks.push({ ruby:data.ruby,length:strReplaceAll(data.body,SPECIAL_CHARS,'').length },data.body);
             else blocks[blocks.length-1] += data.body;
         }
 
