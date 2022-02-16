@@ -43,43 +43,45 @@ function parseHeader(headers,copyrightProtect = false){
 
 function convertLine(line){
     //console.log(line.txt);
-    let gen = Parser.parseSentence(line.txt);
-    let syllables = gen.next().value; // 음절
-    line.txt = gen.next().value; // 음절 구분용 슬래시(/)가 제거된 문장
+    let syllables = line.syllables = Parser.parseSentence(line.txt); // 음절
     //console.log(syllables,line.txt);
+    delete line.txt;
     let lineData = [];
     let oldData = [...line.data];
-    if(oldData.length < syllables.filter(a => a.trim()).length){
+    let slength = syllables
+    .map(a => a.filter(aa => typeof aa == 'string').join('').trim())
+    .filter(a => a).length;
+    if(oldData.length < slength){
         // 추가로 넣어야 할 타이밍 이벤트의 수
         let cnt = syllables.length-oldData.length+1;
         let event = oldData.pop();
         let duration = (event.end-event.start)/cnt;
         let ptime = event.start;
         for(let i = 0;i < cnt;i++) oldData.push(new TimingEvent(Math.round(ptime+duration*i),Math.round(ptime+duration*(i+1)),event.currentBPM));
-    }else if(oldData.length > syllables.filter(a => a.trim()).length){
-        let slen = syllables.filter(a => a.trim()).length;
-        oldData[slen-1].end = oldData.pop().end;
-        while(oldData.length > slen){
+    }else if(oldData.length > slength){
+        // 타이밍 이벤트 합치기
+        oldData[slength-1].end = oldData.pop().end;
+        while(oldData.length > slength){
             oldData.pop();
         }
         //console.log(oldData,syllables)
     }
     // 가사를 중간에 멈출 수 없도록 막음
     for(let i in oldData){ oldData[i].end = oldData[i-(-1)] ? oldData[i-(-1)].start : oldData[i].end; }
-    for(let i in syllables){
-        if(syllables[i] == ' '){
+
+    // 타이밍 데이터에 직접 가사내용을 넣진 않음
+    for(let syll of syllables){
+        if(syll[0] == ' '){
             lineData.push({
-                text:' ',
                 start:lineData[lineData.length-1].end,
                 end:lineData[lineData.length-1].end
             });
         }else{
             try{
                 let block = oldData.shift();
-                block.text = syllables[i];
                 lineData.push(block);
             }catch(e){
-                console.log(syllables,line.txt);
+                console.log(syllables);
                 throw e;
             }
         }

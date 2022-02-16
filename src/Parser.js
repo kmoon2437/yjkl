@@ -69,6 +69,9 @@ module.exports = class Parser{
     static ALPHABET_REGEX = /(['a-zA-Z])/;
 
     static parse(data){
+        // 버퍼일수도 있으니 문자열로 변환
+        data = data.toString();
+        
         // 주석 제거
         data = removeComments(data.replace(/\r\n/g,'\n').replace(/\r/g,'\n'));
         
@@ -148,102 +151,160 @@ module.exports = class Parser{
         return !!a.map(e => e[1]).join('');
     }
     
-    // 슬래시 없이 자동 음절 구분 기능에 의존하는 경우
-    static splitSentence(txt){
-        let m = {
-            CUT:0,
-            MERGE:1
-        }
+    // 슬래시(/) 없이 사용하는 경우
+    static splitSentence(parsed){
         let str = '';
         let alphabet = true;
         let isEscape = false;
         let connect = false;
         let result = [];
-        for(let i = 0;i < txt.length;i++){
-            let chr = txt[i];
-            if(isEscape){
-                isEscape = false;
-                str += chr;
-            }else if(chr == ESCAPE){
-                isEscape = true;
-            }else if(chr == CONNECT_SYLLABLES){
-                connect = true;
-            }else if(chr.match(SPACE_REGEX)){
-                if(str) result.push(str);
-                result.push(chr);
-                str = '';
-            //}else if(chr.match(this.ALPHABET_REGEX)){
-            }else if(ALPHABETS.indexOf(chr) >= 0){
-                alphabet = true;
-                str += chr;
-            }else if(chr == SPLIT_ALPHABET && alphabet){
-                result.push(str); str = '';
-            }else if(chr == '(' || chr == '['){
-                //if(alphabet || txt[i-(-1)].match(this.ALPHABET_REGEX)) str += chr;
-                if(alphabet || ALPHABETS.indexOf(txt[i-(-1)]) >= 0) str += chr;
-                else result.push(chr);
-            }else if(chr == ')' || chr == ']'){
-                if(alphabet) str += chr;
-                else result[result.length-1] += chr;
-            }else if(RUBY_BLOCK[chr]){
-                let close = RUBY_BLOCK[chr];
-                while(chr = txt[i]){
-                    if(alphabet) str += chr;
-                    else result[result.length-1] += chr;
-                    if(chr == close) break;
-                    i++;
-                }
-            }else{
-                alphabet = false;
+        for(let i in parsed){
+            let txt = parsed[i];
+            if(typeof txt != 'string'){
                 if(str){
                     result.push(str);
                     str = '';
+                    txt.connectBefore = true;
                 }
-                if(SPECIAL_CHARS3.indexOf(result[result.length-1]) >= 0 || connect) result[result.length-1] += chr;
-                else result.push(chr);
-                connect = false;
+                result.push(txt);
+                continue;
             }
-            //console.log('chr',chr,'/ i',i,'/ str',str,'/ alphabet',alphabet,'/ result',result);
+            
+            for(let j in txt){
+                // 현재 문자와 이전 문자 결정
+                let chr = txt[j];
+                let nchr = txt[j-(-1)];
+                if(j == txt.length-1){
+                    if(typeof parsed[i-(-1)] == 'string'){
+                        nchr = parsed[i-(-1)].charAt(0);
+                    }else{
+                        // 2연속으로 객체가 나올 일은 없음
+                        nchr = parsed[i-(-2)] ? parsed[i-(-2)].charAt(0) : '';
+                    }
+                }
+                
+                if(isEscape){
+                    isEscape = false;
+                    str += chr;
+                }else if(chr == ESCAPE){
+                    isEscape = true;
+                }else if(chr == CONNECT_SYLLABLES){
+                    connect = true;
+                }else if(chr.match(SPACE_REGEX)){
+                    if(str) result.push(str);
+                    result.push(chr);
+                    str = '';
+                //}else if(chr.match(this.ALPHABET_REGEX)){
+                }else if(ALPHABETS.indexOf(chr) >= 0){
+                    alphabet = true;
+                    str += chr;
+                }else if(chr == SPLIT_ALPHABET && alphabet){
+                    result.push(str); str = '';
+                }else if(chr == '('){
+                    //if(alphabet || nchr.match(this.ALPHABET_REGEX)) str += chr;
+                    if(alphabet || ALPHABETS.indexOf(nchr) >= 0) str += chr;
+                    else result.push(chr);
+                }else if(chr == ')'){
+                    if(alphabet) str += chr;
+                    else result[result.length-1] += chr;
+                }else{
+                    alphabet = false;
+                    if(result[result.length-1] && result[result.length-1].connectBefore){
+                        result[result.length-1].connectBefore = false;
+                    }
+                    if(str){
+                        result.push(str);
+                        str = '';
+                    }
+                    if(SPECIAL_CHARS3.indexOf(result[result.length-1]) >= 0 || connect) result[result.length-1] += chr;
+                    else result.push(chr);
+                    connect = false;
+                }
+            }
         }
         if(str) result.push(str);
-
-        /*let final = [];
-        let connect = false;
-        result.forEach(a => {
-            if(a == CONNECT_SYLLABLES) return connect = true;
-            if(connect) final[final.length-1] += a;
-            else final.push(a);
-            connect = false;
-        });*/
-        return result;
+        //console.log(result)
+        
+        let connectAfter = true;
+        return result.reduce((a,b,i) => {
+            if(typeof b != 'string'){
+                if(b.connectBefore) a[a.length-1].push(b);
+                else a.push([b]);
+                connectAfter = true;
+                delete b.connectBefore;
+            }else{
+                if(connectAfter) a[a.length-1].push(b);
+                else a.push([b]);
+                connectAfter = false;
+            }
+            return a;
+        },[[]]).filter(a => a.length);
+    }
+    
+    static splitSentenceBySlash(parsed){
+        let result = [];
+        let str = [];
+        for(let i in parsed){
+            let txt = parsed[i];
+            if(typeof txt != 'string'){
+                if(str){
+                    result.push(str);
+                    str = '';
+                    txt.connectBefore = true;
+                }
+                result.push(txt);
+                continue;
+            }
+            
+            for(let j in txt){
+                let chr = txt[j];
+                if(chr == FORCE_SPLIT){
+                    result.push(str);
+                    str = '';
+                }else if(chr.match(SPACE_REGEX)){
+                    result.push(str,chr);
+                    str = '';
+                }else{
+                    str += chr;
+                }
+            }
+        }
+        if(str) result.push(str);
+        
+        let connectAfter = true;
+        return result.filter(a => a).reduce((a,b,i) => {
+            if(typeof b != 'string'){
+                if(b.connectBefore) a[a.length-1].push(b);
+                else a.push([b]);
+                connectAfter = true;
+                delete b.connectBefore;
+            }else{
+                if(connectAfter) a[a.length-1].push(b);
+                else a.push([b]);
+                connectAfter = false;
+            }
+            return a;
+        },[[]]).filter(a => a.length);
     }
 
-    static *parseSentence(sentence){
+    static parseSentence(sentence){
         sentence = sentence.replace(SPACE_REGEX,' '); // 띄어쓰기가 여러개 있던걸 한개로 변환
-        
+        let parsed = Parser.parseRubySyntax(sentence);
         let syllables;
         if(sentence.match(FORCE_SPLIT)){
-            sentence = strReplaceAll(sentence,SPECIAL_CHARS2,'')
-            .replace(new RegExp(`${FORCE_SPLIT}+`,'g'),FORCE_SPLIT);
-            syllables = sentence
-            .split(FORCE_SPLIT)
-            .map(a => a
-            .split(SPACE_REGEX)
-            .map((a,i) => i == 0 ? a : [' ',a])
-            .flat()).flat();
+            syllables = Parser.splitSentenceBySlash(parsed);
         }else{
-            syllables = Parser.splitSentence(sentence);
+            syllables = Parser.splitSentence(parsed);
         }
         
         // 전각<->반각 간 변환
-        syllables = syllables.map(a => {
+        syllables = syllables.map(a => { return a;
             for(let i in WIDTH_CONVERT_TABLE){
                 return strReplaceAll(a,i,WIDTH_CONVERT_TABLE[i]);
             }
         });
     
-        yield syllables; // 잘린 거
-        yield syllables.join('');
+        return syllables; // 잘린 거
     }
 
     static parseNumber(num){
@@ -302,7 +363,7 @@ module.exports = class Parser{
 
     static parseRubySyntax(text){
         //this.status = [];
-        let blocks = [];
+        let blocks = [''];
         let status = {
             body:'',
             ruby:'',
@@ -318,7 +379,8 @@ module.exports = class Parser{
                 if(status.body) throw new SyntaxError(`Already opened the body block at position ${i} (character: '${chr}')`);
                 if(status.ruby) throw new SyntaxError(`Already opened the ruby block at position ${i} (character: '${chr}')`);
                 status.body = chr;
-                blocks.push([data.body,data.ruby]);
+                //blocks.push([data.body,data.ruby]);
+                blocks.push({ ruby:data.ruby,length:data.body.length },data.body);
                 data.body = '';
                 data.ruby = '';
             }else if(chr == BODY_BLOCK[status.body]){
@@ -331,7 +393,8 @@ module.exports = class Parser{
                 if(!status.bodyBlockClosed){
                     let str = data.body.slice(0,data.body.length-1);
                     data.body = data.body[data.body.length-1];
-                    blocks.push([str,'']);
+                    //blocks.push([str,'']);
+                    blocks[blocks.length-1] += str;
                 }
                 status.bodyBlockClosed = false;
                 status.ruby = chr;
@@ -339,7 +402,8 @@ module.exports = class Parser{
                 throw new SyntaxError(`Invalid syntax at position ${i} (character: '${chr}')`);
             }else if(chr == RUBY_BLOCK[status.ruby]){
                 status.ruby = '';
-                blocks.push([data.body,data.ruby]);
+                //blocks.push([data.body,data.ruby]);
+                blocks.push({ ruby:data.ruby,length:data.body.length },data.body);
                 data.body = '';
                 data.ruby = '';
             }else{
@@ -351,8 +415,16 @@ module.exports = class Parser{
             }
             //this.status.push({ chr,status:{...status},data:{...data} });
         }
-        if(data.body) blocks.push([data.body,data.ruby]);
+        if(data.body){
+            //blocks.puash([data.body,data.ruby]);
+            if(data.ruby) blocks.push({ ruby:data.ruby,length:data.body.length },data.body);
+            else blocks[blocks.length-1] += data.body;
+        }
 
-        return blocks.filter(a => a[0]);
+        return blocks.reduce((a,b) => {
+            if(typeof b == 'string' && typeof a[a.length-1] == 'string') a[a.length-1] += b;
+            else a.push(b);
+            return a;
+        },[]).filter(a => typeof a == 'string' ? a : a.ruby);
     }
 }
