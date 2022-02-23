@@ -75,7 +75,7 @@ for(let verse of input){
     for(let line of preprocessed){
         let [ sentence,sub ] = line.split('::');
         let sentence2 = sentence.replace(PARAM_REGEX,'');
-        let syllables = Lyrics.Parser.parseSentence(sentence2).next().value.filter(a => a.trim());
+        let syllLength = Lyrics.Parser.parseSentence(sentence2).filter(a => a.filter(s => typeof s == 'string').join('').trim()).length;
         if(!verseEnded) output += '\nl';
         verseEnded = false;
         let matches;
@@ -92,12 +92,12 @@ for(let verse of input){
         if(sub) output += `\nu ${sub}`;
 
         output += `\nt`;
-        for(let i in syllables){
+        for(let i = 0;i < syllLength;i++){
             output += ' 0';
         }
         //output += '\n'+JSON.stringify(syllables)
     }
-    output += '\nl 0';
+    output += '\nl -';
     verseEnded = true;
 }
 

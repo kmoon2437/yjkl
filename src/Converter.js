@@ -116,11 +116,22 @@ class SetVerseProperty{
     }
 }
 class TimingEvent{
-    constructor(start,end,currentBPM){
-        //this.length = length;
+    constructor(start,end,currentBPM,splitTimes,splitRatio){
+        // 시작시간
         this.start = start;
+        
+        // 끝시간
         this.end = end;
+        
+        // 현재 bpm
         this.currentBPM = currentBPM;
+        
+        // 한 글자를 여러개로 쪼갤경우 쪼개지는 기준 시간
+        this.splitTimes = splitTimes;
+        
+        // 한 글자를 여러개로 쪼갤경우 쪼개는 비율
+        // splitTimes에 아무것도 없으면 무시됨
+        this.splitRatio = splitRatio;
     }
 }
 
@@ -140,13 +151,13 @@ module.exports = class Converter{
                             bpm = Parser.parseNumber(args[0]);
                         }break;
                         case 'show':{
-                            stringEvents.push(new SetVerseProperty('waitTime',Parser.parseTime(args[0],bpm,ticksPerBeat).ms));
+                            stringEvents.push(new SetVerseProperty('waitTime',Parser.parseTime(args[0],bpm,ticksPerBeat).reduce((a,b) => a+b.ms,0)));
                         }break;
                         case 'count':{
                             stringEvents.push(new SetVerseProperty('count',parseInt(args[0],10)));
                         }break;
                         case 'delay':{
-                            playtime += Parser.parseTime(args[0],bpm,ticksPerBeat).ms;
+                            playtime += Parser.parseTime(args[0],bpm,ticksPerBeat).reduce((a,b) => a+b.ms,0);
                         }break;
                         case 'delay_ms':{
                             playtime += Parser.parseNumber(args[0]);
@@ -157,16 +168,23 @@ module.exports = class Converter{
                     cmd.timings.forEach(time => {
                         let start = playtime;
                         let parsed = Parser.parseTime(time,bpm,ticksPerBeat);
-                        playtime += parsed.ms;
+                        let splitTimes = [];
+                        let splitRatio = [];
+                        parsed.forEach(a => {
+                            splitTimes.push(playtime += a.ms);
+                            splitRatio.push(a.ratio);
+                        });
+                        splitTimes.pop();
+                        //playtime += parsed.ms;
                         let end = parsed.stakato ? start+STAKATO_TIME : playtime;
-                        stringEvents.push(new TimingEvent(Math.round(start),Math.round(end),bpm));
+                        stringEvents.push(new TimingEvent(Math.round(start),Math.round(end),bpm,splitTimes,splitRatio));
                     });
                 }break;
                 case 'l':{
                     if(cmd.end){
-                        let endTime = cmd.endTime == '-' ? 0 : cmd.endTime;
+                        let endTime = parseFloat(cmd.endTime) ? cmd.endTime : 0;
                         stringEvents.push(new VerseSeparate((typeof cmd.endTime != 'undefined')
-                        ? Parser.parseTime(endTime,bpm,ticksPerBeat).ms : 0));
+                        ? Parser.parseTime(endTime,bpm,ticksPerBeat).reduce((a,b) => a+b.ms,0) : 0));
                     }else{
                         stringEvents.push(new LineSeparate());
                     }

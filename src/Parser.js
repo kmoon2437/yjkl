@@ -322,31 +322,72 @@ module.exports = class Parser{
 
         return timing;
     }
-
-    static parseTime(time,bpm = 120,ticksPerBeat = 960){
+    
+    // 최대공약수(the "g"reatest "c"ommon "d"enominator)
+    // 두 수의 최대공약수 계산
+    static #doCalcGCD(num1,num2){
+        while(num2 != 0){
+            let tmp = num1 % num2;
+            num1 = num2;
+            num2 = tmp;
+        }
+        return Math.abs(num1);
+    }
+    
+    // 여러 수의 최대공약수를 계산
+    static #calcGCD(arr){
+        let gcd = Parser.#doCalcGCD(arr.shift(),arr.shift());
+        while(arr.length){
+            gcd = Parser.#doCalcGCD(gcd,arr.shift());
+        }
+        return gcd;
+    }
+    
+    static #doParseTime(time,bpm = 120,ticksPerBeat = 120){
         if(typeof time == 'number'){
             return {
                 ms:60000/bpm*(parseFloat(Parser.parseNumber(time))/ticksPerBeat),
-                stakato:false
+                stakato:false,ratio:1
             };
         }else if(typeof time == 'string'){
-            var [ tick,ms ] = time.split(':');
-            var parsed = {
-                stakato:tick.startsWith('*')
+            let [ ttt,ms ] = time.split(':');
+            let [ ratio,tick ] = ttt.split('@').length > 1 ? ttt.split('@') : [1,ttt];
+            
+            let parsed = {
+                stakato:time.startsWith('*'),
+                ratio:parseInt(ratio,10)
             };
             if(parsed.stakato){
                 let tick2 = tick.split('');
                 tick2.shift();
                 tick = tick2.join('');
             }
-            var beat = parseFloat(Parser.parseNumber(tick))/ticksPerBeat;
+            let beat = parseFloat(Parser.parseNumber(tick))/ticksPerBeat;
             parsed.ms = 60000/bpm*beat;
             if(ms) parsed.ms += parseFloat(Parser.parseNumber(ms));
             return parsed;
         }else return {
-            ms:0,
+            ms:0,ratio:1,
             stakato:false
         };
+    }
+
+    // 틱:밀리초
+    // ,를 사용해 여러개 붙일 수 있음
+    // (즉 한글자를 여러번 나눠서 색칠 가능)
+    // 비율@틱:밀리초 형태로 쓸 수 있음
+    // 비율은 생략 가능,생략시 기본값은 1
+    // - 예시: 19:72,*3@11:21 => 1:3 비율로 색칠
+    static parseTime(time,bpm = 120,ticksPerBeat = 120){
+        let split = time.split(',');
+        let parsed = split.map(a => Parser.#doParseTime(a,bpm,ticksPerBeat));
+        if(split.length > 1){
+            let gcd = Parser.#calcGCD(parsed.map(a => a.ratio));
+            for(let i in parsed){
+                parsed[i].ratio /= gcd;
+            }
+        }
+        return parsed;
     }
 
     static stringifyRubySyntax(blocks){
