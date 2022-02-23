@@ -344,32 +344,22 @@ module.exports = class Parser{
     }
     
     static #doParseTime(time,bpm = 120,ticksPerBeat = 120){
-        if(typeof time == 'number'){
-            return {
-                ms:60000/bpm*(parseFloat(Parser.parseNumber(time))/ticksPerBeat),
-                stakato:false,ratio:1
-            };
-        }else if(typeof time == 'string'){
-            let [ ttt,ms ] = time.split(':');
-            let [ ratio,tick ] = ttt.split('@').length > 1 ? ttt.split('@') : [1,ttt];
-            
-            let parsed = {
-                stakato:time.startsWith('*'),
-                ratio:parseInt(ratio,10)
-            };
-            if(parsed.stakato){
-                let tick2 = tick.split('');
-                tick2.shift();
-                tick = tick2.join('');
-            }
-            let beat = parseFloat(Parser.parseNumber(tick))/ticksPerBeat;
-            parsed.ms = 60000/bpm*beat;
-            if(ms) parsed.ms += parseFloat(Parser.parseNumber(ms));
-            return parsed;
-        }else return {
-            ms:0,ratio:1,
-            stakato:false
+        let [ ttt,ms ] = time.split(':');
+        let [ ratio,tick ] = ttt.split('@').length > 1 ? ttt.split('@') : [1,ttt];
+        
+        let parsed = {
+            stakato:time.startsWith('*'),
+            ratio:parseInt(ratio,10)
         };
+        if(parsed.stakato){
+            let tick2 = tick.split('');
+            tick2.shift();
+            tick = tick2.join('');
+        }
+        let beat = parseFloat(Parser.parseNumber(tick))/ticksPerBeat;
+        parsed.ms = 60000/bpm*beat;
+        if(ms) parsed.ms += parseFloat(Parser.parseNumber(ms));
+        return parsed;
     }
 
     // 틱:밀리초
@@ -379,15 +369,25 @@ module.exports = class Parser{
     // 비율은 생략 가능,생략시 기본값은 1
     // - 예시: 19:72,*3@11:21 => 1:3 비율로 색칠
     static parseTime(time,bpm = 120,ticksPerBeat = 120){
-        let split = time.split(',');
-        let parsed = split.map(a => Parser.#doParseTime(a,bpm,ticksPerBeat));
-        if(split.length > 1){
-            let gcd = Parser.#calcGCD(parsed.map(a => a.ratio));
-            for(let i in parsed){
-                parsed[i].ratio /= gcd;
+        if(typeof time == 'number'){
+            return [{
+                ms:60000/bpm*(parseFloat(Parser.parseNumber(time))/ticksPerBeat),
+                stakato:false,ratio:1
+            }];
+        }else if(typeof time == 'string'){
+            let split = time.split(',');
+            let parsed = split.map(a => Parser.#doParseTime(a,bpm,ticksPerBeat));
+            if(split.length > 1){
+                let gcd = Parser.#calcGCD(parsed.map(a => a.ratio));
+                for(let i in parsed){
+                    parsed[i].ratio /= gcd;
+                }
             }
-        }
-        return parsed;
+            return parsed;
+        }else return [{
+            ms:0,ratio:1,
+            stakato:false
+        }];
     }
 
     static stringifyRubySyntax(blocks){
