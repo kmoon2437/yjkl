@@ -1,6 +1,11 @@
 const Events = require('./Events');
 const Parser = require('./Parser');
 const Commands = require('./Commands');
+const {
+    LineSeparate,VerseSeparate,
+    SetLineProperty,SetVerseProperty,
+    TimingEvent
+} = require('./util_classes');
 
 const STAKATO_TIME = 10;
 
@@ -17,9 +22,9 @@ function cloneObject(obj){
     return newobj;
 }
 
-function parseHeader(headers,copyrightProtect = false){
+function classifyHeader(headers,copyrightProtect = false){
     var headers = cloneObject(headers);
-    var parsed = {
+    var classified = {
         files:{},
         meta:{},
         otherHeaders:null
@@ -27,18 +32,18 @@ function parseHeader(headers,copyrightProtect = false){
 
     for(var i in headers){
         if(copyrightProtect ? i.match(/^\@file-/g) : i.match(/^file-/g)){
-            parsed.files[i.replace(/(@?)file-/i,'')] = headers[i];
+            classified.files[i.replace(/(@?)file-/i,'')] = headers[i];
             delete headers[i];
         }
         else if(i.match(/^meta-/g)){
-            parsed.meta[i.replace('meta-','')] = headers[i];
+            classified.meta[i.replace('meta-','')] = headers[i];
             delete headers[i];
         }
     }
 
-    parsed.otherHeaders = headers;
+    classified.otherHeaders = headers;
 
-    return parsed;
+    return classified;
 }
 
 function convertLine(line){
@@ -90,51 +95,6 @@ function convertLine(line){
     return line;
 }
 
-class LineSeparate{
-    constructor(){
-        this.name = 'LineSeparate';
-    }
-}
-class VerseSeparate{
-    constructor(ms){
-        this.name = 'VerseSeparate';
-        this.hideDelay = ms;
-    }
-}
-class SetLineProperty{
-    constructor(key,val){
-        this.name = 'SetLineProperty';
-        this.key = key;
-        this.val = val;
-    }
-}
-class SetVerseProperty{
-    constructor(key,val){
-        this.name = 'SetVerseProperty';
-        this.key = key;
-        this.val = val;
-    }
-}
-class TimingEvent{
-    constructor(start,end,currentBPM,splitTimes,splitRatio){
-        // 시작시간
-        this.start = start;
-        
-        // 끝시간
-        this.end = end;
-        
-        // 현재 bpm
-        this.currentBPM = currentBPM;
-        
-        // 한 글자를 여러개로 쪼갤경우 쪼개지는 기준 시간
-        this.splitTimes = splitTimes;
-        
-        // 한 글자를 여러개로 쪼갤경우 쪼개는 비율
-        // splitTimes에 아무것도 없으면 무시됨
-        this.splitRatio = splitRatio;
-    }
-}
-
 module.exports = class Converter{
     static parseCommandWithTickDuration(commands,headers){
         var bpm = 120;
@@ -151,13 +111,13 @@ module.exports = class Converter{
                             bpm = Parser.parseNumber(args[0]);
                         }break;
                         case 'show':{
-                            stringEvents.push(new SetVerseProperty('waitTime',Parser.parseTime(args[0],bpm,ticksPerBeat).reduce((a,b) => a+b.ms,0)));
+                            stringEvents.push(new SetVerseProperty('waitTime',Parser.parseDuration(args[0],bpm,ticksPerBeat).reduce((a,b) => a+b.ms,0)));
                         }break;
                         case 'count':{
                             stringEvents.push(new SetVerseProperty('count',parseInt(args[0],10)));
                         }break;
                         case 'delay':{
-                            playtime += Parser.parseTime(args[0],bpm,ticksPerBeat).reduce((a,b) => a+b.ms,0);
+                            playtime += Parser.parseDuration(args[0],bpm,ticksPerBeat).reduce((a,b) => a+b.ms,0);
                         }break;
                         case 'delay_ms':{
                             playtime += Parser.parseNumber(args[0]);
@@ -167,7 +127,7 @@ module.exports = class Converter{
                 case 't':{
                     cmd.timings.forEach(time => {
                         let start = playtime;
-                        let parsed = Parser.parseTime(time,bpm,ticksPerBeat);
+                        let parsed = Parser.parseDuration(time,bpm,ticksPerBeat);
                         let splitTimes = [];
                         let splitRatio = [];
                         parsed.forEach(a => {
@@ -184,7 +144,7 @@ module.exports = class Converter{
                     if(cmd.end){
                         let endTime = parseFloat(cmd.endTime) ? cmd.endTime : 0;
                         stringEvents.push(new VerseSeparate((typeof cmd.endTime != 'undefined')
-                        ? Parser.parseTime(endTime,bpm,ticksPerBeat).reduce((a,b) => a+b.ms,0) : 0));
+                        ? Parser.parseDuration(endTime,bpm,ticksPerBeat).reduce((a,b) => a+b.ms,0) : 0));
                     }else{
                         stringEvents.push(new LineSeparate());
                     }
@@ -206,20 +166,20 @@ module.exports = class Converter{
 
     static convert(data,copyrightProtect = false){
         var { headers,commands } = Parser.parse(data);
-        var parsedHeaders = parseHeader(headers,copyrightProtect);
+        var classifiedHeaders = classifyHeader(headers,copyrightProtect);
         var events = new Events();
         var stringEvents = null;
         var verses = [];
 
-        switch(parsedHeaders.meta['timing-type']){
+        switch(classifiedHeaders.meta['timing-type']){
             case 'tick-duration':{
-                stringEvents = this.parseCommandWithTickDuration(commands,parsedHeaders);
+                stringEvents = this.parseCommandWithTickDuration(commands,classifiedHeaders);
             }break;
             case 'ms-timing':{
-                stringEvents = this.parseCommandWithMsTiming(commands,parsedHeaders);
+                stringEvents = this.parseCommandWithMsTiming(commands,classifiedHeaders);
             }break;
             default:{
-                stringEvents = this.parseCommandWithTickDuration(commands,parsedHeaders);
+                stringEvents = this.parseCommandWithTickDuration(commands,classifiedHeaders);
             }break;
         }
 
@@ -357,40 +317,42 @@ module.exports = class Converter{
             events.add(0,'hidelyrics',{},true);
         }
 
-        parsedHeaders.media = '';
-        if(parsedHeaders.files.yjk || parsedHeaders.files.midi){
-            if(parsedHeaders.files.yjk){
-                parsedHeaders.media += 'yjk';
-            }else if(parsedHeaders.files.midi){
-                parsedHeaders.media += 'midi';
+        classifiedHeaders.media = '';
+        if(classifiedHeaders.files.yjk || classifiedHeaders.files.midi){
+            if(classifiedHeaders.files.yjk){
+                classifiedHeaders.media += 'yjk';
+            }else if(classifiedHeaders.files.midi){
+                classifiedHeaders.media += 'midi';
             }
-            parsedHeaders.media += '-';
-            if(parsedHeaders.files.mv){
-                parsedHeaders.media += 'mv';
+            classifiedHeaders.media += '-';
+            if(classifiedHeaders.files.mv){
+                classifiedHeaders.media += 'mv';
             }else{
-                parsedHeaders.media += 'only';
+                classifiedHeaders.media += 'only';
             }
         }else{
-            if(parsedHeaders.files.mr && parsedHeaders.files.mv){
-                parsedHeaders.media = 'mr-mv';
-            }else if(parsedHeaders.files.mr && !parsedHeaders.files.mv){
-                parsedHeaders.media = 'mr-only';
-            }else if(!parsedHeaders.files.mr && parsedHeaders.files.mv){
-                parsedHeaders.media = 'mv-only';
+            if(classifiedHeaders.files.mr && classifiedHeaders.files.mv){
+                classifiedHeaders.media = 'mr-mv';
+            }else if(classifiedHeaders.files.mr && !classifiedHeaders.files.mv){
+                classifiedHeaders.media = 'mr-only';
+            }else if(!classifiedHeaders.files.mr && classifiedHeaders.files.mv){
+                classifiedHeaders.media = 'mv-only';
             }
         }
 
-        if(parsedHeaders.media == 'yjk-mv' || parsedHeaders.media == 'midi-mv' || parsedHeaders.media == 'mr-mv'){
-            let time = parsedHeaders.otherHeaders['mv-timing'] || 0;
+        if(classifiedHeaders.media == 'yjk-mv' || classifiedHeaders.media == 'midi-mv' || classifiedHeaders.media == 'mr-mv'){
+            let time = classifiedHeaders.otherHeaders['mv-timing'] || 0;
             events.add(time,'playmv',{},true);
         }
 
         return {
-            headers:parsedHeaders,
+            headers:classifiedHeaders,
             rawHeaders:headers,
             events:events.getAll(),
-            verses:verses,
-            verseRanges,commands
+            verseRanges,
+            debug:{
+                verses:verses,commands
+            }
         };
     }
 }
