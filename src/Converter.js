@@ -136,7 +136,7 @@ module.exports = class Converter{
                         });
                         splitTimes.pop();
                         //playtime += parsed.ms;
-                        let end = parsed.stakato ? start+STAKATO_TIME : playtime;
+                        let end = parsed[parsed.length-1].stakato ? (splitTimes[splitTimes.length-1] || start)+STAKATO_TIME : playtime;
                         stringEvents.push(new TimingEvent(Math.round(start),Math.round(end),bpm,splitTimes,splitRatio));
                     });
                 }break;
