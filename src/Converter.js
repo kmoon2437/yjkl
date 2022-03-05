@@ -1,13 +1,11 @@
+const CommandConverter = require('./CommandConverter');
 const Events = require('./Events');
 const Parser = require('./Parser');
-const Commands = require('./Commands');
 const {
     LineSeparate,VerseSeparate,
     SetLineProperty,SetVerseProperty,
     TimingEvent
 } = require('./util_classes');
-
-const STAKATO_TIME = 10;
 
 function cloneObject(obj){
     var newobj = {};
@@ -96,90 +94,52 @@ function convertLine(line){
 }
 
 module.exports = class Converter{
-    static parseCommandWithTickDuration(commands,headers){
-        var bpm = 120;
-        var stringEvents = [];
-        var ticksPerBeat = headers.meta['ticks-per-beat'] || 120;
-        var playtime = 0;
-        for(var cmd of commands){
-            switch(cmd.type.toLowerCase()){
-                case 'c':{
-                    let { name,opts } = Commands.parse(cmd.cmd);
-                    let { _unknown:args } = opts;
-                    switch(name.toLowerCase()){
-                        case 'bpm':{
-                            bpm = Parser.parseNumber(args[0]);
-                        }break;
-                        case 'show':{
-                            stringEvents.push(new SetVerseProperty('waitTime',Parser.parseDuration(args[0],bpm,ticksPerBeat).reduce((a,b) => a+b.ms,0)));
-                        }break;
-                        case 'count':{
-                            stringEvents.push(new SetVerseProperty('count',parseInt(args[0],10)));
-                        }break;
-                        case 'delay':{
-                            playtime += Parser.parseDuration(args[0],bpm,ticksPerBeat).reduce((a,b) => a+b.ms,0);
-                        }break;
-                        case 'delay_ms':{
-                            playtime += Parser.parseNumber(args[0]);
-                        }break;
-                    }
-                }break;
-                case 't':{
-                    cmd.timings.forEach(time => {
-                        let start = playtime;
-                        let parsed = Parser.parseDuration(time,bpm,ticksPerBeat);
-                        let splitTimes = [];
-                        let splitRatio = [];
-                        parsed.forEach(a => {
-                            splitTimes.push(playtime += a.ms);
-                            splitRatio.push(a.ratio);
-                        });
-                        splitTimes.pop();
-                        //playtime += parsed.ms;
-                        let end = parsed[parsed.length-1].stakato ? (splitTimes[splitTimes.length-1] || start)+STAKATO_TIME : playtime;
-                        stringEvents.push(new TimingEvent(Math.round(start),Math.round(end),bpm,splitTimes,splitRatio));
-                    });
-                }break;
-                case 'l':{
-                    if(cmd.end){
-                        let endTime = parseFloat(cmd.endTime) ? cmd.endTime : 0;
-                        stringEvents.push(new VerseSeparate((typeof cmd.endTime != 'undefined')
-                        ? Parser.parseDuration(endTime,bpm,ticksPerBeat).reduce((a,b) => a+b.ms,0) : 0));
-                    }else{
-                        stringEvents.push(new LineSeparate());
-                    }
-                }break;
-                case 's':{
-                    stringEvents.push(new SetLineProperty('txt',cmd.sentence));
-                }break;
-                case 'u':{
-                    stringEvents.push(new SetLineProperty('sub',cmd.sentence));
-                }break;
-                case 'p':{
-                    stringEvents.push(new SetLineProperty('type',cmd.typecode));
-                }break;
-            }
-        }
-
-        return stringEvents;
-    }
-
     static convert(data,copyrightProtect = false){
         var { headers,commands } = Parser.parse(data);
         var classifiedHeaders = classifyHeader(headers,copyrightProtect);
         var events = new Events();
         var stringEvents = null;
         var verses = [];
+        classifiedHeaders.meta['ticks-per-beat'] = classifiedHeaders.meta['ticks-per-beat'] || 120;
+
+        classifiedHeaders.media = '';
+        if(classifiedHeaders.files.yjk || classifiedHeaders.files.midi){
+            if(classifiedHeaders.files.yjk){
+                classifiedHeaders.media += 'yjk';
+            }else if(classifiedHeaders.files.midi){
+                classifiedHeaders.media += 'midi';
+            }
+            classifiedHeaders.media += '-';
+            if(classifiedHeaders.files.mv){
+                classifiedHeaders.media += 'mv';
+            }else{
+                classifiedHeaders.media += 'only';
+            }
+        }else{
+            if(classifiedHeaders.files.mr && classifiedHeaders.files.mv){
+                classifiedHeaders.media = 'mr-mv';
+            }else if(classifiedHeaders.files.mr && !classifiedHeaders.files.mv){
+                classifiedHeaders.media = 'mr-only';
+            }else if(!classifiedHeaders.files.mr && classifiedHeaders.files.mv){
+                classifiedHeaders.media = 'mv-only';
+            }
+        }
+        
+        let useMsec = classifiedHeaders.useMsec = !(classifiedHeaders.media.startsWith('midi')
+        || classifiedHeaders.media.startsWith('yjk'));
 
         switch(classifiedHeaders.meta['timing-type']){
-            case 'tick-duration':{
-                stringEvents = this.parseCommandWithTickDuration(commands,classifiedHeaders);
+            case 'std-duration':{
+                useMsec = true;
+                stringEvents = CommandConverter.parseCommandWithStdDuration(commands,classifiedHeaders);
             }break;
-            case 'ms-timing':{
-                stringEvents = this.parseCommandWithMsTiming(commands,classifiedHeaders);
+            case 'playtime-duration':{
+                stringEvents = CommandConverter.parseCommandWithPlaytimeDuration(commands,classifiedHeaders);
             }break;
             default:{
-                stringEvents = this.parseCommandWithTickDuration(commands,classifiedHeaders);
+                stringEvents = useMsec
+                ? CommandConverter.parseCommandWithStdDuration(commands,classifiedHeaders)
+                : CommandConverter.parseCommandWithPlaytimeDuration(commands,classifiedHeaders);
             }break;
         }
 
@@ -243,17 +203,21 @@ module.exports = class Converter{
             let startCount = 4;
             let startTime = verse.lines[0].data[0].start;
             let ganjuDuration = verse.lines[0].data[0].start-lastEndTime;
-            let beat = 60000/verse.startBPM;
             let verseRange = [0,0];
-            let beatBase = 60000/190;
-            if(ganjuDuration <= beat*20 && ganjuDuration <= beatBase*20) startCount = 3;
-            if(ganjuDuration <= beat*15 && ganjuDuration <= beatBase*15) startCount = 2;
-            if(ganjuDuration <= beat*10 && ganjuDuration <= beatBase*10) startCount = 1;
-            if(ganjuDuration <= beat*4) startCount = 0;
             let firstRender = startTime;
+            let beat;
+            
+            if(useMsec){
+                beat = 60000/verse.startBPM;
+            }else{
+                beat = classifiedHeaders.meta['ticks-per-beat'];
+            }
+            if(ganjuDuration <= beat*16) startCount = 3;
+            if(ganjuDuration <= beat*12) startCount = 2;
+            if(ganjuDuration <= beat*8) startCount = 1;
+            if(ganjuDuration <= beat*4) startCount = 0;
 
-            let bottom = false;
-            if(verse.lines.length < 2) bottom = true;
+            let bottom = verse.lines.length < 2;
             startCount = Math.round(Math.max(0,Math.min(verse.count,4))) || startCount;
             for(var i = 1;i <= startCount;i++){
                 events.add(startTime-(beat*i),'countdown',{ val:i,bottom });
@@ -264,13 +228,24 @@ module.exports = class Converter{
                 events.add(firstRender-i*10,'countdown',{ val:i-startCount,bottom });
             }
             events.add(startTime,'countdown',{ val:null,bottom });
-            let initialMinus = 200;
-            let minus = initialMinus;
-            if(ganjuDuration > 25000 && first) minus = Math.min(6000,ganjuDuration/2);
-            if(verse.waitTime) minus = Math.max(verse.waitTime,initialMinus);
-            firstRender = Math.max(firstRender-minus,0);
-            verseRange[0] = firstRender-10;
-
+            
+            let tpb = classifiedHeaders.meta['ticks-per-beat'];
+            if(useMsec){
+                let initialMinus = 200;
+                let minus = initialMinus;
+                if(ganjuDuration > 25000 && first) minus = Math.min(6000,ganjuDuration/2);
+                if(verse.waitTime) minus = Math.max(verse.waitTime,initialMinus);
+                firstRender = Math.max(firstRender-minus,0);
+                verseRange[0] = firstRender-10;
+            }else{
+                let initialMinus = tpb/2;
+                let minus = initialMinus;
+                if(ganjuDuration > tpb*40 && first) minus = Math.min(tpb*8,ganjuDuration/2);
+                if(verse.waitTime) minus = Math.max(verse.waitTime,initialMinus);
+                firstRender = Math.max(firstRender-minus,0);
+                verseRange[0] = firstRender-1;
+            }
+            
             if(verse.lines.length < 2){
                 events.add(firstRender,'renderlyrics',{
                     lineCode:'b',
@@ -283,7 +258,7 @@ module.exports = class Converter{
                     lineCode:'a',
                     data:verse.lines[0]
                 });
-                events.add(firstRender+125,'renderlyrics',{
+                events.add(firstRender+(useMsec ? 125 : tpb/4),'renderlyrics',{
                     lineCode:'b',
                     data:verse.lines[1]
                 });
@@ -309,36 +284,18 @@ module.exports = class Converter{
             first = false;
         }
 
-        if(true){
-            let keys = Object.keys(events.getAll());
-            let firsteventtime = Math.min(...keys);
-            firsteventtime = Math.max(firsteventtime-1600,0);
-            events.add(Math.min(10000,firsteventtime),'cleangui',{},true);
-            events.add(0,'hidelyrics',{},true);
-        }
-
-        classifiedHeaders.media = '';
-        if(classifiedHeaders.files.yjk || classifiedHeaders.files.midi){
-            if(classifiedHeaders.files.yjk){
-                classifiedHeaders.media += 'yjk';
-            }else if(classifiedHeaders.files.midi){
-                classifiedHeaders.media += 'midi';
-            }
-            classifiedHeaders.media += '-';
-            if(classifiedHeaders.files.mv){
-                classifiedHeaders.media += 'mv';
-            }else{
-                classifiedHeaders.media += 'only';
-            }
+        let keys = Object.keys(events.getAll());
+        let firsteventtime = Math.min(...keys);
+        if(useMsec){
+            firsteventtime = Math.max(firsteventtime-1500,0);
         }else{
-            if(classifiedHeaders.files.mr && classifiedHeaders.files.mv){
-                classifiedHeaders.media = 'mr-mv';
-            }else if(classifiedHeaders.files.mr && !classifiedHeaders.files.mv){
-                classifiedHeaders.media = 'mr-only';
-            }else if(!classifiedHeaders.files.mr && classifiedHeaders.files.mv){
-                classifiedHeaders.media = 'mv-only';
-            }
+            firsteventtime = Math.max(firsteventtime-(classifiedHeaders.meta['ticks-per-beat']*1.75),0);
         }
+        // 이벤트 추가는 이렇게 했지만 이 시간에 도달하지 않아도
+        // 재생후 10초가 되면 cleangui를 자동으로 실행해야 됨
+        // 참고로 cleangui는 제목 숨기기 이벤트
+        events.add(firsteventtime,'cleangui',{},true);
+        events.add(0,'hidelyrics',{},true);
 
         if(classifiedHeaders.media == 'yjk-mv' || classifiedHeaders.media == 'midi-mv' || classifiedHeaders.media == 'mr-mv'){
             let time = classifiedHeaders.otherHeaders['mv-timing'] || 0;

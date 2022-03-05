@@ -1,4 +1,4 @@
-const { Duration,ChangeBPM } = require('./util_classes');
+const { Duration,MsDuration } = require('./util_classes');
 
 const ALPHABETS = require('./alphabets'); // 영어,라틴문자,키릴문자,그리스문자 등등등
 const WIDTH_CONVERT_TABLE = require('./width_convert');
@@ -139,6 +139,9 @@ module.exports = class Parser{
                 break;
                 case 'p':
                     cmd.typecode = Parser.parseNumber(cc[0]);
+                break;
+                case 'd':
+                    cmd.delay = cc[0];
                 break;
             }
             commands.push(cmd);
@@ -383,7 +386,7 @@ module.exports = class Parser{
         return gcd;
     }
     
-    static #doParseDuration(time,bpm = 120,ticksPerBeat = 120){
+    static #doParseDuration(time){
         /*if(time.startsWith('#')){
             return new ChangeBPM(this.parseNumber(time.slice(1)));
         }*/
@@ -398,31 +401,25 @@ module.exports = class Parser{
             tick2.shift();
             tick = tick2.join('');
         }
-        let beat = parseFloat(Parser.parseNumber(tick))/ticksPerBeat;
-        let msec = 60000/bpm*beat;
-        if(ms) msec += parseFloat(Parser.parseNumber(ms));
-        return new Duration(msec,ratioo,stakato);
+        tick = Parser.#parseMathExpression(tick);
+        if(ms) ms = Parser.#parseMathExpression(ms);
+        return new Duration(ms ? [tick,ms] : tick,ratioo,stakato);
     }
 
-    // 틱:밀리초
     // ,를 사용해 여러개 붙일 수 있음
     // (즉 한글자를 여러번 나눠서 색칠 가능)
-    // 비율@틱:밀리초 형태로 쓸 수 있음
+    // 비율@시간 형태로 쓸 수 있음
     // 비율은 생략 가능,생략시 기본값은 1
-    // - 예시: 19:72,*3@11:21 => 1:3 비율로 색칠
-    // &로 2개의 duration을 더할 수 있음(추후 구현 예정)
-    // - (숫자)+(숫자)와의 차이점은 중간에 bpm변경이 가능(#숫자)
-    // -- 예시: 1972&#170&1121
-    // - 우선순위는 ,이 &보다 높음
-    static parseDuration(time,bpm = 120,ticksPerBeat = 120){
+    // - 예시: 19:72,*3@11:21 => 4개로 나눠서 1:3 비율로 색칠
+    static parsePlaytimeDuration(time){
         if(typeof time == 'number'){
             return [new Duration(
-                60000/bpm*(parseFloat(Parser.parseNumber(time))/ticksPerBeat),
+                parseFloat(Parser.parseNumber(time)),
                 1,false
             )];
         }else if(typeof time == 'string'){
             let split = time.split(',');
-            let parsed = split.map(a => Parser.#doParseDuration(a,bpm,ticksPerBeat));
+            let parsed = split.map(a => Parser.#doParseDuration(a));
             if(split.length > 1){
                 let gcd = Parser.#calcGCD(parsed.map(a => a.ratio));
                 for(let i in parsed){
@@ -431,6 +428,17 @@ module.exports = class Parser{
             }
             return parsed;
         }else return [new Duration(0,1,false)];
+    }
+
+    // 틱:밀리초
+    static parseStdDuration(time,bpm = 120,ticksPerBeat = 120){
+        let result = [];
+        for(let dur of Parser.parsePlaytimeDuration(time)){
+            let msec = 60000/bpm*(dur.time/ticksPerBeat);
+            if(dur.time2) msec += dur;
+            result.push(new MsDuration(msec,dur.ratio,dur.stakato));
+        }
+        return result;
     }
 
     static stringifyRubySyntax(blocks){

@@ -12,6 +12,15 @@ class ChangeBPM{
 }
 
 class Duration{
+    constructor(time,ratio = 1,stakato = false){
+        this.time = parseFloat(time instanceof Array ? time[0] : time);
+        this.time2 = parseFloat(time instanceof Array ? time[1] : 0);
+        this.ratio = ratio;
+        this.stakato = stakato;
+    }
+}
+
+class MsDuration{
     constructor(ms,ratio = 1,stakato = false){
         this.ms = ms;
         this.ratio = ratio;
@@ -72,7 +81,7 @@ class TimingEvent{
 }
 
 module.exports = {
-    ChangeBPM,Duration,
+    ChangeBPM,Duration,MsDuration,
     
     LineSeparate,VerseSeparate,
     SetLineProperty,SetVerseProperty,
