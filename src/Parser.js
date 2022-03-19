@@ -12,9 +12,9 @@ const SPLIT_ALPHABET = '_';
 const ESCAPE = '\\';
 const SPACE_REGEX = /[\u0020\u00a0\u3000]+/g; // \u0020(일반 띄어쓰기)와 \u00a0(nbsp), \u3000(전각 띄어쓰기)를 모두 인식
 const SPECIAL_CHARS = [FORCE_SPLIT,CONNECT_SYLLABLES,SPLIT_ALPHABET];
-const SPECIAL_CHARS2 = [CONNECT_SYLLABLES,SPLIT_ALPHABET];
+//const SPECIAL_CHARS2 = [CONNECT_SYLLABLES,SPLIT_ALPHABET];
 const SPECIAL_CHARS3 = [...Object.keys(BODY_BLOCK),'('];
-const SPECIAL_CHARS4 = [...Object.values(BODY_BLOCK),')'];
+//const SPECIAL_CHARS4 = [...Object.values(BODY_BLOCK),')'];
 
 function removeComments(str){
     var strings = [];
@@ -30,13 +30,13 @@ function removeComments(str){
     return str.trim();
 }
 
-function strReverse(str){
+/*function strReverse(str){
     return str.split('').reverse().join('');
 }
 
 function strContains(str,a){
     return str != strReplaceAll(str,a,'');
-}
+}*/
 
 function strReplaceAll(str,a,b){
     if(a instanceof Array && !(b instanceof Array)){
@@ -58,13 +58,6 @@ function strReplaceAll(str,a,b){
         }
     }
     return str;
-}
-
-class Syllable{
-    constructor(s,alphabet = false){
-        this.s = s;
-        this.alphabet = alphabet;
-    }
 }
 
 module.exports = class Parser{
