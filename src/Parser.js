@@ -115,7 +115,7 @@ module.exports = class Parser{
         var commands = [];
         content = content.trim().split('\n');
         for(var c of content){
-            var cc = c.split(SPACE_REGEX);
+            var cc = c.trim().split(SPACE_REGEX);
             
             var type = cc.shift().toLowerCase();
             var cmd = {};

@@ -212,10 +212,17 @@ module.exports = class Converter{
             }else{
                 beat = classifiedHeaders.meta['ticks-per-beat'];
             }
-            if(ganjuDuration <= beat*16) startCount = 3;
-            if(ganjuDuration <= beat*12) startCount = 2;
-            if(ganjuDuration <= beat*8) startCount = 1;
-            if(ganjuDuration <= beat*4) startCount = 0;
+
+            let bbb = {
+                n3:first ? 16 : 10,
+                n2:first ? 12 : 7,
+                n1:first ? 8 : 4,
+                n0:first ? 4 : 1
+            };
+            if(ganjuDuration <= beat*bbb.n3) startCount = 3;
+            if(ganjuDuration <= beat*bbb.n2) startCount = 2;
+            if(ganjuDuration <= beat*bbb.n1) startCount = 1;
+            if(ganjuDuration <= beat*bbb.n0) startCount = 0;
 
             let bottom = verse.lines.length < 2;
             startCount = Math.round(Math.max(0,Math.min(verse.count,4))) || startCount;
