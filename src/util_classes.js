@@ -61,7 +61,7 @@ class SetVerseProperty{
 }
 
 class TimingEvent{
-    constructor(start,end,currentBPM,splitTimes,splitRatio){
+    constructor(start,end,currentBPM,splitTimes = [],splitRatio = [1]){
         // 시작시간
         this.start = start;
         
