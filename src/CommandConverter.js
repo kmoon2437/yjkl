@@ -84,7 +84,8 @@ module.exports = class CommandConverter{
     }
 
     // 새로운 방식(midi계열 반주 기본값). mr이면 밀리초,midi면 틱을 사용
-    // 근데 ticks per beat는 가사파일에서 다른 값으로 설정 가능. 플레이시 알아서 계산해야됨
+    // 틱과 밀리초를 같이 사용 불가
+    // 근데 ticks per beat는 가사파일과 미디파일에서 다를수 있음. 플레이시 알아서 계산해야됨
     static parseCommandWithPlaytimeDuration(commands,headers){
         var stringEvents = [];
         var playtime = 0;

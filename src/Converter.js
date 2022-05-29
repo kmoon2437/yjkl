@@ -20,7 +20,7 @@ function cloneObject(obj){
     return newobj;
 }
 
-function classifyHeader(headers,copyrightProtect = false){
+function classifyHeader(headers){
     var headers = cloneObject(headers);
     var classified = {
         files:{},
@@ -29,7 +29,7 @@ function classifyHeader(headers,copyrightProtect = false){
     };
 
     for(var i in headers){
-        if(copyrightProtect ? i.match(/^\@file-/g) : i.match(/^file-/g)){
+        if(i.match(/^file-/g)){
             classified.files[i.replace(/(@?)file-/i,'')] = headers[i];
             delete headers[i];
         }
@@ -93,10 +93,14 @@ function convertLine(line){
     return line;
 }
 
+const defaultOptions = {
+    headerOnly:false
+};
+
 module.exports = class Converter{
-    static convert(data,copyrightProtect = false){
+    static convert(data,opts = {}){
         var { headers,commands } = Parser.parse(data);
-        var classifiedHeaders = classifyHeader(headers,copyrightProtect);
+        var classifiedHeaders = classifyHeader(headers);
         var events = new Events();
         var stringEvents = null;
         var verses = [];
@@ -125,19 +129,25 @@ module.exports = class Converter{
             }
         }
         
-        let useMsec = classifiedHeaders.useMsec = !(classifiedHeaders.media.startsWith('midi')
+        // 결과 변수를 미리 만들어둠
+        let convertedResult = {
+            headers:classifiedHeaders,
+            rawHeaders:headers
+        };
+        
+        convertedResult.headers.useMsec = !(classifiedHeaders.media.startsWith('midi')
         || classifiedHeaders.media.startsWith('yjk'));
 
         switch(classifiedHeaders.meta['timing-type']){
             case 'std-duration':{
-                useMsec = true;
+                convertedResult.headers.useMsec = true;
                 stringEvents = CommandConverter.parseCommandWithStdDuration(commands,classifiedHeaders);
             }break;
             case 'playtime-duration':{
                 stringEvents = CommandConverter.parseCommandWithPlaytimeDuration(commands,classifiedHeaders);
             }break;
             default:{
-                stringEvents = useMsec
+                stringEvents = convertedResult.headers.useMsec
                 ? CommandConverter.parseCommandWithStdDuration(commands,classifiedHeaders)
                 : CommandConverter.parseCommandWithPlaytimeDuration(commands,classifiedHeaders);
             }break;
@@ -195,6 +205,67 @@ module.exports = class Converter{
                 verses.push(verse);
             }
         }
+        
+        // BPMChanges 헤더에 값이 있으면 파싱한 뒤 그에 맞춰 밀리초로 변환
+        // 형식:'시간:bpm,시간:bpm,시간:bpm,....'
+        // 예시:'0:110,3600:100,120:90,120:82,120:75,120:70,120:60,120:50,120:45,120:160'
+        // 시간은 틱단위이며 가사파일 기준임(여기서 파싱을 하므로)
+        let bpmlist = null,bpmevents = null;
+        if(classifiedHeaders.otherHeaders['tempo-changes'] && !convertedResult.headers.useMsec){
+            //console.log(classifiedHeaders.otherHeaders['tempo-changes']);
+            //console.log('progress A');
+            convertedResult.headers.useMsec = true;
+            bpmlist = classifiedHeaders.otherHeaders['tempo-changes']
+            .split(',').map(a => a.split(':'))
+            .map(a => ({ time:parseFloat(a[0]),bpm:parseFloat(a[1]) }));
+            bpmevents = {};
+            let playms = 0;
+            let playtick = 0;
+            //console.log('progress B');
+            for(let i in bpmlist){
+                let e = {...bpmlist[i]};
+                playtick += e.time;
+                bpmlist[i].time = playtick;
+                //if(!bpmevents[e.time]) bpmevents[e.time] = [];
+                playms += 60000/(bpmlist[i-1] ? bpmlist[i-1].bpm : 120)*(e.time/classifiedHeaders.meta['ticks-per-beat']);
+                //bpmevents[e.time].push({ playms,bpm:e.bpm });
+                bpmlist[i].playms = playms;
+            }
+            bpmlist = bpmlist.sort((a,b) => a.time-b.time);
+            let revbpmlist = [...bpmlist].reverse();
+            function convf(val){
+                for(let g of revbpmlist){
+                    if(g.time < val){
+                        return Math.round(
+                            ((val - g.time)
+                            / classifiedHeaders.meta['ticks-per-beat']
+                            * (60000/g.bpm)) + g.playms
+                        );
+                    }
+                }
+            }
+            //console.log('progress C');
+            for(let i in verses){
+                let startPoint = verses[i].lines[0].data[0].start;
+                for(let j of revbpmlist){
+                    if(j.time < startPoint){
+                        verses.startBPM = j.bpm;
+                    }
+                }
+                for(let j in verses[i].lines){
+                    for(let k in verses[i].lines[j].data){
+                        verses[i].lines[j].data[k].start = convf(verses[i].lines[j].data[k].start);
+                        verses[i].lines[j].data[k].end = convf(verses[i].lines[j].data[k].end);
+                        if(verses[i].lines[j].data[k].splitTimes){
+                            verses[i].lines[j].data[k].splitTimes = verses[i].lines[j].data[k].splitTimes.map(a => {
+                                return convf(a);
+                            });
+                        }
+                    }
+                }
+            }
+            //console.log('progress D');
+        }
 
         var lastEndTime = 0;
         var verseRanges = [];
@@ -207,7 +278,7 @@ module.exports = class Converter{
             let firstRender = startTime;
             let beat;
             
-            if(useMsec){
+            if(convertedResult.headers.useMsec){
                 beat = 60000/verse.startBPM;
             }else{
                 beat = classifiedHeaders.meta['ticks-per-beat'];
@@ -237,7 +308,7 @@ module.exports = class Converter{
             events.add(startTime,'countdown',{ val:null,bottom });
             
             let tpb = classifiedHeaders.meta['ticks-per-beat'];
-            if(useMsec){
+            if(convertedResult.headers.useMsec){
                 let initialMinus = 200;
                 let minus = initialMinus;
                 if(ganjuDuration > 25000 && first) minus = Math.min(6000,ganjuDuration/2);
@@ -265,7 +336,7 @@ module.exports = class Converter{
                     lineCode:'a',
                     data:verse.lines[0]
                 });
-                events.add(firstRender+(useMsec ? 125 : tpb/4),'renderlyrics',{
+                events.add(firstRender+(convertedResult.headers.useMsec ? 125 : tpb/4),'renderlyrics',{
                     lineCode:'b',
                     data:verse.lines[1]
                 });
@@ -293,7 +364,7 @@ module.exports = class Converter{
 
         let keys = Object.keys(events.getAll());
         let firsteventtime = Math.min(...keys);
-        if(useMsec){
+        if(convertedResult.headers.useMsec){
             firsteventtime = Math.max(firsteventtime-1500,0);
         }else{
             firsteventtime = Math.max(firsteventtime-(classifiedHeaders.meta['ticks-per-beat']*1.75),0);
@@ -315,7 +386,7 @@ module.exports = class Converter{
             events:events.getAll(),
             verseRanges,
             debug:{
-                verses:verses,commands
+                verses:verses,commands,bpmlist,bpmevents
             }
         };
     }
