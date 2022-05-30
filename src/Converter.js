@@ -135,8 +135,8 @@ module.exports = class Converter{
             rawHeaders:headers
         };
         
-        convertedResult.headers.useMsec = !(classifiedHeaders.media.startsWith('midi')
-        || classifiedHeaders.media.startsWith('yjk'));
+        convertedResult.headers.useMsec = !((classifiedHeaders.media.startsWith('midi')
+        || classifiedHeaders.media.startsWith('yjk')) || classifiedHeaders.otherHeaders['tempo-changes']);
 
         switch(classifiedHeaders.meta['timing-type']){
             case 'std-duration':{
@@ -249,7 +249,7 @@ module.exports = class Converter{
                 let startPoint = verses[i].lines[0].data[0].start;
                 for(let j of revbpmlist){
                     if(j.time < startPoint){
-                        verses.startBPM = j.bpm;
+                        verses[i].startBPM = j.bpm;
                     }
                 }
                 for(let j in verses[i].lines){
@@ -298,12 +298,12 @@ module.exports = class Converter{
             let bottom = verse.lines.length < 2;
             startCount = Math.round(Math.max(0,Math.min(verse.count,4))) || startCount;
             for(var i = 1;i <= startCount;i++){
-                events.add(startTime-(beat*i),'countdown',{ val:i,bottom });
+                events.add(startTime-(beat*i),'countdown',{ val:i < 0 || i > 4 ? null : i,bottom });
                 firstRender = Math.min(firstRender,startTime-(beat*i));
             }
 
             for(var i = 1;i <= Math.max(0,4-startCount);i++){
-                events.add(firstRender-i*10,'countdown',{ val:i-startCount,bottom });
+                events.add(firstRender-i*10,'countdown',{ val:i < startCount || i-startCount > 4 ? null : i-startCount,bottom });
             }
             events.add(startTime,'countdown',{ val:null,bottom });
             
