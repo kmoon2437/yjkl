@@ -249,7 +249,7 @@ module.exports = class Converter{
                 let startPoint = verses[i].lines[0].data[0].start;
                 for(let j of revbpmlist){
                     if(j.time < startPoint){
-                        verses[i].startBPM = j.bpm;
+                        verses[i].startBPM = j.bpm; break;
                     }
                 }
                 for(let j in verses[i].lines){
