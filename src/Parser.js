@@ -12,8 +12,9 @@ const SPLIT_ALPHABET = '_';
 const ESCAPE = '\\';
 const SPACE_REGEX = /[\u0020\u00a0\u3000]+/g; // \u0020(일반 띄어쓰기)와 \u00a0(nbsp), \u3000(전각 띄어쓰기)를 모두 인식
 const SPECIAL_CHARS = [FORCE_SPLIT,CONNECT_SYLLABLES,SPLIT_ALPHABET];
+const TYPE_M1_IN_TYPE_0_OPEN = '(';
 //const SPECIAL_CHARS2 = [CONNECT_SYLLABLES,SPLIT_ALPHABET];
-const SPECIAL_CHARS3 = [...Object.keys(BODY_BLOCK),'('];
+const SPECIAL_CHARS3 = [...Object.keys(BODY_BLOCK),TYPE_M1_IN_TYPE_0_OPEN];
 //const SPECIAL_CHARS4 = [...Object.values(BODY_BLOCK),')'];
 
 function removeComments(str){
@@ -197,7 +198,7 @@ module.exports = class Parser{
                     str += chr;
                 }else if(chr == SPLIT_ALPHABET && alphabet){
                     result.push(str); str = '';
-                }else if(chr == '('){
+                }else if(chr == TYPE_M1_IN_TYPE_0_OPEN){
                     //if(alphabet || nchr.match(this.ALPHABET_REGEX)) str += chr;
                     if(alphabet || ALPHABETS.indexOf(nchr) >= 0) str += chr;
                     else result.push(chr);
@@ -476,7 +477,12 @@ module.exports = class Parser{
                 if(!status.bodyBlockClosed){
                     let str = data.body.slice(0,data.body.length-1);
                     data.body = data.body[data.body.length-1];
+                    //console.log('str:',str,',data.body:',data.body);
                     //blocks.push([str,'']);
+                    if(str.endsWith(TYPE_M1_IN_TYPE_0_OPEN)){
+                        str = str.substring(0,str.length-1);
+                        data.body = TYPE_M1_IN_TYPE_0_OPEN+data.body;
+                    }
                     blocks[blocks.length-1] += str;
                 }
                 status.bodyBlockClosed = false;
@@ -486,7 +492,7 @@ module.exports = class Parser{
             }else if(chr == RUBY_BLOCK[status.ruby]){
                 status.ruby = '';
                 //blocks.push([data.body,data.ruby]);
-                blocks.push({ ruby:data.ruby,length:strReplaceAll(data.body,SPECIAL_CHARS,'').length },data.body);
+                blocks.push({ ruby:data.ruby,length:strReplaceAll(strReplaceAll(data.body,SPECIAL_CHARS,''),TYPE_M1_IN_TYPE_0_OPEN,'').length },data.body);
                 data.body = '';
                 data.ruby = '';
             }else{
@@ -500,7 +506,9 @@ module.exports = class Parser{
         }
         if(data.body){
             //blocks.puash([data.body,data.ruby]);
-            if(data.ruby) blocks.push({ ruby:data.ruby,length:strReplaceAll(data.body,SPECIAL_CHARS,'').length },data.body);
+            if(data.ruby) blocks.push({
+                ruby:data.ruby,length:strReplaceAll(strReplaceAll(data.body,SPECIAL_CHARS,''),TYPE_M1_IN_TYPE_0_OPEN,'').length
+            },data.body);
             else blocks[blocks.length-1] += data.body;
         }
 
