@@ -46,17 +46,20 @@ function classifyHeader(headers){
 
 function convertLine(line){
     //console.log(line.txt);
-    let syllables = line.syllables = Parser.parseSentence(line.txt); // 음절
+    // 음절 나누기(ruby와 body가 따로 분리되어 있음)
+    let syllables = line.syllables = Parser.parseSentence(line.txt);
     //console.log(syllables,line.txt);
     delete line.txt;
     let lineData = [];
     let oldData = [...line.data];
-    let slength = syllables
-    .map(a => a.filter(aa => typeof aa == 'string').join('').trim())
+    
+    // 음절에서 띄어쓰기(' ')를 제외한 length
+    let slength = syllables.body
+    .map(a => a.body.trim())
     .filter(a => a).length;
     if(oldData.length < slength){
         // 추가로 넣어야 할 타이밍 이벤트의 수
-        let cnt = syllables.length-oldData.length+1;
+        let cnt = syllables.body.length-oldData.length+1;
         let event = oldData.pop();
         let duration = (event.end-event.start)/cnt;
         let ptime = event.start;
@@ -73,8 +76,8 @@ function convertLine(line){
     for(let i in oldData){ oldData[i].end = oldData[i-(-1)] ? oldData[i-(-1)].start : oldData[i].end; }
 
     // 타이밍 데이터에 직접 가사내용을 넣진 않음
-    for(let syll of syllables){
-        if(syll[0] == ' '){
+    for(let syll of syllables.body){
+        if(syll.body == ' '){
             lineData.push({
                 start:lineData[lineData.length-1].end,
                 end:lineData[lineData.length-1].end

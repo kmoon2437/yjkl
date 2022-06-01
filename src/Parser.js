@@ -13,6 +13,7 @@ const ESCAPE = '\\';
 const SPACE_REGEX = /[\u0020\u00a0\u3000]+/g; // \u0020(일반 띄어쓰기)와 \u00a0(nbsp), \u3000(전각 띄어쓰기)를 모두 인식
 const SPECIAL_CHARS = [FORCE_SPLIT,CONNECT_SYLLABLES,SPLIT_ALPHABET];
 const TYPE_M1_IN_TYPE_0_OPEN = '(';
+const TYPE_M1_IN_TYPE_0_CLOSE = ')';
 //const SPECIAL_CHARS2 = [CONNECT_SYLLABLES,SPLIT_ALPHABET];
 const SPECIAL_CHARS3 = [...Object.keys(BODY_BLOCK),TYPE_M1_IN_TYPE_0_OPEN];
 //const SPECIAL_CHARS4 = [...Object.values(BODY_BLOCK),')'];
@@ -156,30 +157,23 @@ module.exports = class Parser{
         let isEscape = false;
         let connect = false;
         let result = [];
+        let srcObj = {
+            bracketed:false,
+            body:''
+        };
+        function o(str){
+            let obj = {...srcObj};
+            obj.body = str;
+            return obj;
+        }
         for(let i in parsed){
             let txt = parsed[i];
-            if(typeof txt != 'string'){
-                if(str){
-                    result.push(str);
-                    str = '';
-                    txt.connectBefore = true;
-                }
-                result.push(txt);
-                continue;
-            }
             
-            for(let j in txt){
+            srcObj.bracketed = txt.bracketed;
+            for(let j in txt.body){
                 // 현재 문자와 이전 문자 결정
-                let chr = txt[j];
-                let nchr = txt[j-(-1)];
-                if(j == txt.length-1){
-                    if(typeof parsed[i-(-1)] == 'string'){
-                        nchr = parsed[i-(-1)].charAt(0);
-                    }else{
-                        // 2연속으로 객체가 나올 일은 없음
-                        nchr = parsed[i-(-2)] ? parsed[i-(-2)].charAt(0) : '';
-                    }
-                }
+                let chr = txt.body[j];
+                let nchr = txt.body[j-(-1)];
                 
                 if(isEscape){
                     isEscape = false;
@@ -189,116 +183,93 @@ module.exports = class Parser{
                 }else if(chr == CONNECT_SYLLABLES){
                     connect = true;
                 }else if(chr.match(SPACE_REGEX)){
-                    if(str) result.push(str);
-                    result.push(chr);
+                    if(str) result.push(o(str));
+                    result.push(o(chr));
                     str = '';
                 //}else if(chr.match(this.ALPHABET_REGEX)){
                 }else if(ALPHABETS.indexOf(chr) >= 0){
                     alphabet = true;
                     str += chr;
                 }else if(chr == SPLIT_ALPHABET && alphabet){
-                    result.push(str); str = '';
+                    result.push(o(str)); str = '';
                 }else if(chr == TYPE_M1_IN_TYPE_0_OPEN){
                     //if(alphabet || nchr.match(this.ALPHABET_REGEX)) str += chr;
                     if(alphabet || ALPHABETS.indexOf(nchr) >= 0) str += chr;
-                    else result.push(chr);
-                }else if(chr == ')'){
+                    else result.push(o(chr));
+                }else if(chr == TYPE_M1_IN_TYPE_0_CLOSE){
                     if(alphabet) str += chr;
-                    else result[result.length-1] += chr;
+                    else result[result.length-1].body += chr;
                 }else{
                     alphabet = false;
-                    if(result[result.length-1] && result[result.length-1].connectBefore){
-                        result[result.length-1].connectBefore = false;
-                    }
                     if(str){
-                        result.push(str);
+                        result.push(o(str));
                         str = '';
                     }
-                    if(SPECIAL_CHARS3.indexOf(result[result.length-1]) >= 0 || connect) result[result.length-1] += chr;
-                    else result.push(chr);
+                    if(SPECIAL_CHARS3.indexOf(result[result.length-1]) >= 0 || connect) result[result.length-1].body += chr;
+                    else result.push(o(chr));
                     connect = false;
                 }
             }
         }
-        if(str) result.push(str);
-        
-        let connectAfter = true;
-        return result.reduce((a,b,i) => {
-            if(typeof b != 'string'){
-                if(b.connectBefore) a[a.length-1].push(b);
-                else a.push([b]);
-                connectAfter = true;
-                delete b.connectBefore;
-            }else{
-                if(connectAfter) a[a.length-1].push(b);
-                else a.push([b]);
-                connectAfter = false;
-            }
-            return a;
-        },[[]]).filter(a => a.length);
+        if(str) result.push(o(str));
+
+        return result.filter(a => a.body);
     }
     
     static splitSentenceBySlash(parsed){
         let result = [];
         let str = [];
+        let srcObj = {
+            bracketed:false,
+            body:''
+        };
+        function o(str){
+            let obj = {...srcObj};
+            obj.body = str;
+            return obj;
+        }
         for(let i in parsed){
             let txt = parsed[i];
-            if(typeof txt != 'string'){
-                if(str){
-                    result.push(str);
-                    str = '';
-                    txt.connectBefore = true;
-                }
-                result.push(txt);
-                continue;
-            }
-            
-            for(let j in txt){
-                let chr = txt[j];
+            srcObj.bracketed = txt.bracketed;
+            for(let j in txt.body){
+                let chr = txt.body[j];
                 if(chr == FORCE_SPLIT){
-                    result.push(str);
+                    result.push(o(str));
                     str = '';
                 }else if(chr.match(SPACE_REGEX)){
-                    result.push(str,chr);
+                    result.push(o(str),o(chr));
                     str = '';
                 }else{
                     str += chr;
                 }
             }
         }
-        if(str) result.push(str);
-        
-        let connectAfter = true;
-        return result.filter(a => a).reduce((a,b,i) => {
-            if(typeof b != 'string'){
-                if(b.connectBefore) a[a.length-1].push(b);
-                else a.push([b]);
-                connectAfter = true;
-                delete b.connectBefore;
-            }else{
-                if(connectAfter) a[a.length-1].push(b);
-                else a.push([b]);
-                connectAfter = false;
-            }
-            return a;
-        },[[]]).filter(a => a.length).map(a => a.filter(s => !(s instanceof Array)));
+        if(str) result.push(o(str));
+
+        return result.filter(a => a.body);
     }
 
     static parseSentence(sentence){
         sentence = sentence.replace(SPACE_REGEX,' '); // 띄어쓰기가 여러개 있던걸 한개로 변환
-        let parsed = Parser.parseRubySyntax(sentence);
-        let syllables;
+        let syllables = Parser.parseRubySyntax(sentence);
         if(sentence.match(FORCE_SPLIT)){
-            syllables = Parser.splitSentenceBySlash(parsed);
+            syllables.body = Parser.splitSentenceBySlash(syllables.body);
         }else{
-            syllables = Parser.splitSentence(parsed);
+            syllables.body = Parser.splitSentence(syllables.body);
         }
         
         // 전각<->반각 간 변환
-        syllables = syllables.map(a => { return a;
+        syllables.ruby = syllables.ruby.map(a => {
             for(let i in WIDTH_CONVERT_TABLE){
-                return strReplaceAll(a,i,WIDTH_CONVERT_TABLE[i]);
+                a.ruby = strReplaceAll(a.ruby,i,WIDTH_CONVERT_TABLE[i]);
             }
+            return a;
+        });
+        syllables.body = syllables.body.map(a => {
+            for(let i in WIDTH_CONVERT_TABLE){
+                a.body = strReplaceAll(a.body,i,WIDTH_CONVERT_TABLE[i]);
+            }
+            return a;
         });
     
         return syllables; // 잘린 거
@@ -457,6 +428,7 @@ module.exports = class Parser{
             body:'',
             ruby:''
         };
+        let specialChars = [...SPECIAL_CHARS,TYPE_M1_IN_TYPE_0_OPEN];
         for(let i in text){
             let chr = text[i];
             if(BODY_BLOCK[chr]){
@@ -464,7 +436,7 @@ module.exports = class Parser{
                 if(status.ruby) throw new SyntaxError(`Already opened the ruby block at position ${i} (character: '${chr}')`);
                 status.body = chr;
                 //blocks.push([data.body,data.ruby]);
-                blocks.push({ ruby:data.ruby,length:strReplaceAll(data.body,SPECIAL_CHARS,'').length },data.body);
+                blocks.push({ ruby:data.ruby,length:strReplaceAll(data.body,specialChars,'').length },data.body);
                 data.body = '';
                 data.ruby = '';
             }else if(chr == BODY_BLOCK[status.body]){
@@ -492,7 +464,7 @@ module.exports = class Parser{
             }else if(chr == RUBY_BLOCK[status.ruby]){
                 status.ruby = '';
                 //blocks.push([data.body,data.ruby]);
-                blocks.push({ ruby:data.ruby,length:strReplaceAll(strReplaceAll(data.body,SPECIAL_CHARS,''),TYPE_M1_IN_TYPE_0_OPEN,'').length },data.body);
+                blocks.push({ ruby:data.ruby,length:strReplaceAll(data.body,specialChars,'').length },data.body);
                 data.body = '';
                 data.ruby = '';
             }else{
@@ -507,15 +479,77 @@ module.exports = class Parser{
         if(data.body){
             //blocks.puash([data.body,data.ruby]);
             if(data.ruby) blocks.push({
-                ruby:data.ruby,length:strReplaceAll(strReplaceAll(data.body,SPECIAL_CHARS,''),TYPE_M1_IN_TYPE_0_OPEN,'').length
+                ruby:data.ruby,length:strReplaceAll(data.body,specialChars,'').length
             },data.body);
             else blocks[blocks.length-1] += data.body;
         }
 
-        return blocks.reduce((a,b) => {
+        blocks = blocks.reduce((a,b) => {
             if(typeof b == 'string' && typeof a[a.length-1] == 'string') a[a.length-1] += b;
             else a.push(b);
             return a;
         },[]).filter(a => typeof a == 'string' ? a : a.ruby);
+        
+        // 괄호 쳐진 부분은 따로 분리(bracketed로 괄호 안인지 판별)
+        let finalResult = {
+            ruby:[],
+            body:[]
+        };
+        let bracketed = false;
+        let beforeLength = 0;
+        for(let str of blocks){
+            if(typeof str != 'string'){
+                str.beforeLength = Math.max(0,beforeLength);
+                beforeLength = -str.length; // str은 문자열이 아니다
+                finalResult.ruby.push(str);
+                continue;
+            }
+            if(str.indexOf(TYPE_M1_IN_TYPE_0_OPEN) > -1
+            || str.indexOf(TYPE_M1_IN_TYPE_0_CLOSE) > -1){
+                let s = '';
+                for(let chr of str){
+                    if(chr == TYPE_M1_IN_TYPE_0_OPEN){
+                        if(s){
+                            beforeLength += strReplaceAll(s,specialChars,'').length;
+                            finalResult.body.push({ bracketed,body:s });
+                        }
+                        bracketed = true;
+                        s = '';
+                    }else if(chr == TYPE_M1_IN_TYPE_0_CLOSE){
+                        if(s){
+                            beforeLength += strReplaceAll(s,specialChars,'').length;
+                            finalResult.body.push({ bracketed,body:s });
+                        }
+                        bracketed = false;
+                        s = '';
+                    }else{
+                        s += chr;
+                    }
+                }
+                if(s){
+                    beforeLength += strReplaceAll(s,specialChars,'').length;
+                    finalResult.body.push({ bracketed,body:s });
+                }
+            }else{
+                beforeLength += strReplaceAll(str,specialChars,'').length;
+                finalResult.body.push({ bracketed,body:str });
+            }
+        }
+        
+        // bracketed 값이 같으면 합치기
+        finalResult.body = finalResult.body.reduce((a,b) => {
+            if(a[a.length-1]){
+                if(a[a.length-1].bracketed == b.bracketed){
+                    a[a.length-1].body += b.body;
+                }else{
+                    a.push(b);
+                }
+            }else{
+                a.push(b);
+            }
+            return a;
+        },[]);
+        
+        return finalResult;
     }
 }
