@@ -2,34 +2,26 @@ const { Duration,MsDuration } = require('./util_classes');
 
 const ALPHABETS = require('./alphabets'); // 영어,라틴문자,키릴문자,그리스문자 등등등
 const WIDTH_CONVERT_TABLE = require('./width_convert');
-const STRING_PLACEHOLDER = '\uf8ff';
-const STRABLE_CHARS = ["'",'"'];
 const BODY_BLOCK = { '[':']' };
 const RUBY_BLOCK = { '{':'}','<':'>' };
 const FORCE_SPLIT = '/';
 const CONNECT_SYLLABLES = '*';
 const SPLIT_ALPHABET = '_';
 const ESCAPE = '\\';
+const LINE_END = '-';
+const FORCE_START_COUNT = '#';
 const SPACE_REGEX = /[\u0020\u00a0\u3000]+/g; // \u0020(일반 띄어쓰기)와 \u00a0(nbsp), \u3000(전각 띄어쓰기)를 모두 인식
 const SPECIAL_CHARS = [FORCE_SPLIT,CONNECT_SYLLABLES,SPLIT_ALPHABET];
-const TYPE_M1_IN_TYPE_0_OPEN = '(';
-const TYPE_M1_IN_TYPE_0_CLOSE = ')';
+const TYPE_BRACKET_OPEN = '(';
+const TYPE_BRACKET_CLOSE = ')';
+const COMMENT_REGEX1 = /\/\/.*/g; // 한줄 주석
+const COMMENT_REGEX2 = /\/\*(.*?)\*\//gs; /* 여러줄 주석 */
 //const SPECIAL_CHARS2 = [CONNECT_SYLLABLES,SPLIT_ALPHABET];
-const SPECIAL_CHARS3 = [...Object.keys(BODY_BLOCK),TYPE_M1_IN_TYPE_0_OPEN];
+const SPECIAL_CHARS3 = [...Object.keys(BODY_BLOCK),TYPE_BRACKET_OPEN];
 //const SPECIAL_CHARS4 = [...Object.values(BODY_BLOCK),')'];
 
 function removeComments(str){
-    var strings = [];
-
-    str = str.replace(/"(?:[^"\n\\]*|\\[\S\s])*"|'(?:[^'\n\\]*|\\[\S\s])*'/g,(matched) => {
-        strings.push(matched); return STRING_PLACEHOLDER;
-    });
-    str = str.replace(/\/\/.*/g,'').replace(/\/\*[^*]*\*+(?:[^*\/][^*]*\*+)*\//g,'');
-    str = str.replace(new RegExp(STRING_PLACEHOLDER,'g'),() => {
-        return strings.shift();
-    });
-
-    return str.trim();
+    return str.replace(COMMENT_REGEX2,'').replace(COMMENT_REGEX1,'').trim();
 }
 
 /*function strReverse(str){
@@ -68,10 +60,10 @@ module.exports = class Parser{
     static parse(data){
         // 버퍼일수도 있으니 문자열로 변환
         data = data.toString();
-        
+
         // 주석 제거
         data = removeComments(data.replace(/\r\n/g,'\n').replace(/\r/g,'\n'));
-        
+
         // header와 content로 분리
         data = data.trim().split(/\n\n+/g);
         var { header,content } = { header:data[0],content:data[1] };
@@ -83,7 +75,7 @@ module.exports = class Parser{
             }
             content = arr.join('\n').trim();
         }
-        
+
         // header는 대소문자를 무시한다.
         var headers = {};
         header = header.trim().split('\n');
@@ -93,20 +85,9 @@ module.exports = class Parser{
             hh.shift();
             var val = hh.join(':');
             let str = val.trim();
-            let strFirst = str.split('')[0];
-            let strLast = str.split('').reverse()[0];
-            for(let c of STRABLE_CHARS){
-                if(strFirst == c && strLast == c){
-                    str = str.split('');
-                    str.pop();
-                    str.shift();
-                    str = str.join('');
-                    break;
-                }
-            }
             headers[key.toLowerCase()] = str.trim();
         }
-        
+
         var commands = [];
         content = content.trim().split('\n');
         for(var c of content){
@@ -123,14 +104,15 @@ module.exports = class Parser{
                     cmd.timings = cc;
                 break;
                 case 'l':
-                    cmd.end = cc[0] ? true : false;
-                    cmd.endTime = cc[0];
+                    cmd.end = cc[0] == LINE_END || !Number.isNaN(parseFloat(cc[0]));
+                    if(cmd.end) cmd.endTime = cc[0] == LINE_END ? 0 : cc[0];
+                    cmd.forceStartCount = cc[0] == FORCE_START_COUNT;
                 break;
                 case 's':
                     cmd.sentence = cc.join(' ');
-                break;
+                    break;
                 case 'u':
-                    cmd.sentence = cc.join(' ');
+                cmd.sentence = cc.join(' ');
                 break;
                 case 'p':
                     cmd.typecode = Parser.parseNumber(cc[0]);
@@ -141,7 +123,7 @@ module.exports = class Parser{
             }
             commands.push(cmd);
         }
-        
+
         return { headers,commands };
     }
 
@@ -192,11 +174,11 @@ module.exports = class Parser{
                     str += chr;
                 }else if(chr == SPLIT_ALPHABET && alphabet){
                     result.push(o(str)); str = '';
-                }else if(chr == TYPE_M1_IN_TYPE_0_OPEN){
+                }else if(chr == TYPE_BRACKET_OPEN){
                     //if(alphabet || nchr.match(this.ALPHABET_REGEX)) str += chr;
                     if(alphabet || ALPHABETS.indexOf(nchr) >= 0) str += chr;
                     else result.push(o(chr));
-                }else if(chr == TYPE_M1_IN_TYPE_0_CLOSE){
+                }else if(chr == TYPE_BRACKET_CLOSE){
                     if(alphabet) str += chr;
                     else result[result.length-1].body += chr;
                 }else{
@@ -407,6 +389,7 @@ module.exports = class Parser{
     }
 
     static stringifyRubySyntax(blocks){
+        return 'DEPRECATED';
         let lineStr = '';
         for(let el of blocks){
             if(el[1]) lineStr += `[${el[0]}]<${el[1]}>`;
@@ -415,8 +398,88 @@ module.exports = class Parser{
 
         return lineStr;
     }
-
+    
     static parseRubySyntax(text){
+        let ruby = [];
+        let body = '';
+        let status = {
+            body:'',
+            ruby:'',
+            rubyContent:'',
+            str:'',
+            beforeLength:0,
+            afterLength:0,
+            bodyBlockClosed:false
+        };
+        let specialChars = [...SPECIAL_CHARS,TYPE_BRACKET_OPEN,TYPE_BRACKET_CLOSE];
+        for(let i in text){
+            let chr = text[i];
+            if(BODY_BLOCK[chr]){
+                if(status.body) throw new SyntaxError(`Already opened the body block at position ${i} (character: '${chr}')`);
+                if(status.ruby) throw new SyntaxError(`Already opened the ruby block at position ${i} (character: '${chr}')`);
+                status.body = chr;
+            }else if(chr == BODY_BLOCK[status.body]){
+                status.body = '';
+                status.bodyBlockClosed = true;
+            }else if(RUBY_BLOCK[chr]){
+                if(status.ruby) throw new SyntaxError(`Already opened the ruby block at position ${i} (character: '${chr}')`);
+                if(status.body) throw new SyntaxError(`Already opened the body block at position ${i} (character: '${chr}')`);
+                if(i == 0) throw new SyntaxError(`Invalid syntax at position ${i} (character: '${chr}')`);
+
+                // 1글자에만 루비를 지정하는 경우
+                if(!status.bodyBlockClosed){
+                    status.beforeLength--;
+                    status.afterLength = 1;
+                }
+                status.bodyBlockClosed = false;
+                status.ruby = chr;
+            }else if(chr == RUBY_BLOCK[status.ruby]){
+                status.ruby = '';
+                ruby.push({
+                    beforeLength:status.beforeLength,
+                    ruby:status.rubyContent,
+                    length:status.afterLength
+                });
+                status.beforeLength = 0;
+                status.afterLength = 0;
+                status.rubyContent = '';
+            }else if(status.bodyBlockClosed){
+                throw new SyntaxError(`Invalid syntax at position ${i} (character: '${chr}')`);
+            }else{
+                if(status.ruby){
+                    status.rubyContent += chr;
+                }else{
+                    body += chr;
+                    if(specialChars.indexOf(chr) < 0){
+                        if(status.body) status.afterLength++;
+                        else status.beforeLength++;
+                    }
+                }
+            }
+        }
+
+        let bodyArr = [];
+        let bracketed = false;
+        let bodyContent = '';
+        for(let chr of body){
+            if(chr == TYPE_BRACKET_OPEN){
+                if(bodyContent) bodyArr.push({ bracketed,body:bodyContent });
+                bracketed = true;
+                bodyContent = '';
+            }else if(chr == TYPE_BRACKET_CLOSE){
+                if(bodyContent) bodyArr.push({ bracketed,body:bodyContent });
+                bracketed = false;
+                bodyContent = '';
+            }else{
+                bodyContent += chr;
+            }
+        }
+        if(bodyContent) bodyArr.push({ bracketed,body:bodyContent });
+
+        return { ruby,body:bodyArr.filter(a => a.body) };
+    }
+
+    static parseRubySyntaxOld(text){ return null;
         //this.status = [];
         let blocks = [''];
         let status = {
@@ -428,7 +491,7 @@ module.exports = class Parser{
             body:'',
             ruby:''
         };
-        let specialChars = [...SPECIAL_CHARS,TYPE_M1_IN_TYPE_0_OPEN];
+        let specialChars = [...SPECIAL_CHARS,TYPE_BRACKET_OPEN];
         for(let i in text){
             let chr = text[i];
             if(BODY_BLOCK[chr]){
@@ -451,9 +514,9 @@ module.exports = class Parser{
                     data.body = data.body[data.body.length-1];
                     //console.log('str:',str,',data.body:',data.body);
                     //blocks.push([str,'']);
-                    if(str.endsWith(TYPE_M1_IN_TYPE_0_OPEN)){
+                    if(str.endsWith(TYPE_BRACKET_OPEN)){
                         str = str.substring(0,str.length-1);
-                        data.body = TYPE_M1_IN_TYPE_0_OPEN+data.body;
+                        data.body = TYPE_BRACKET_OPEN+data.body;
                     }
                     blocks[blocks.length-1] += str;
                 }
@@ -464,7 +527,7 @@ module.exports = class Parser{
             }else if(chr == RUBY_BLOCK[status.ruby]){
                 status.ruby = '';
                 //blocks.push([data.body,data.ruby]);
-                blocks.push({ ruby:data.ruby,length:strReplaceAll(data.body,specialChars,'').length },data.body);
+                blocks.push({ beforeLength:null,ruby:data.ruby,length:strReplaceAll(data.body,specialChars,'').length },data.body);
                 data.body = '';
                 data.ruby = '';
             }else{
@@ -479,7 +542,7 @@ module.exports = class Parser{
         if(data.body){
             //blocks.puash([data.body,data.ruby]);
             if(data.ruby) blocks.push({
-                ruby:data.ruby,length:strReplaceAll(data.body,specialChars,'').length
+                beforeLength:null,ruby:data.ruby,length:strReplaceAll(data.body,specialChars,'').length
             },data.body);
             else blocks[blocks.length-1] += data.body;
         }
@@ -504,18 +567,18 @@ module.exports = class Parser{
                 finalResult.ruby.push(str);
                 continue;
             }
-            if(str.indexOf(TYPE_M1_IN_TYPE_0_OPEN) > -1
-            || str.indexOf(TYPE_M1_IN_TYPE_0_CLOSE) > -1){
+            if(str.indexOf(TYPE_BRACKET_OPEN) > -1
+            || str.indexOf(TYPE_BRACKET_CLOSE) > -1){
                 let s = '';
                 for(let chr of str){
-                    if(chr == TYPE_M1_IN_TYPE_0_OPEN){
+                    if(chr == TYPE_BRACKET_OPEN){
                         if(s){
                             beforeLength += strReplaceAll(s,specialChars,'').length;
                             finalResult.body.push({ bracketed,body:s });
                         }
                         bracketed = true;
                         s = '';
-                    }else if(chr == TYPE_M1_IN_TYPE_0_CLOSE){
+                    }else if(chr == TYPE_BRACKET_CLOSE){
                         if(s){
                             beforeLength += strReplaceAll(s,specialChars,'').length;
                             finalResult.body.push({ bracketed,body:s });

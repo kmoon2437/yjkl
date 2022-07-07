@@ -32,8 +32,9 @@ class MsDuration{
  * Converter.convert()의 stringEvents 관련
  */
 class LineSeparate{
-    constructor(){
+    constructor(forceStartCount){
         this.name = 'LineSeparate';
+        this.forceStartCount = forceStartCount;
     }
 }
 

@@ -75,7 +75,7 @@ for(let verse of input){
     for(let line of preprocessed){
         let [ sentence,sub ] = line.split('::');
         let sentence2 = sentence.replace(PARAM_REGEX,'');
-        let syllLength = Lyrics.Parser.parseSentence(sentence2).filter(a => a.filter(s => typeof s == 'string').join('').trim()).length;
+        let syllLength = Lyrics.Parser.parseSentence(sentence2).body.filter(a => a.body.trim()).length;
         if(!verseEnded) output += '\nl';
         verseEnded = false;
         let matches;

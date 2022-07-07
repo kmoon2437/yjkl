@@ -61,11 +61,11 @@ module.exports = class CommandConverter{
                 }break;
                 case 'l':{
                     if(cmd.end){
-                        let endTime = parseFloat(cmd.endTime) ? cmd.endTime : 0;
+                        let endTime = cmd.endTime;
                         stringEvents.push(new VerseSeparate((typeof cmd.endTime != 'undefined')
                         ? Parser.parseStdDuration(endTime,bpm,ticksPerBeat).reduce((a,b) => a+b.ms,0) : 0));
                     }else{
-                        stringEvents.push(new LineSeparate());
+                        stringEvents.push(new LineSeparate(cmd.forceStartCount));
                     }
                 }break;
                 case 's':{
@@ -127,11 +127,11 @@ module.exports = class CommandConverter{
                 }break;
                 case 'l':{
                     if(cmd.end){
-                        let endTime = parseFloat(cmd.endTime) ? cmd.endTime : 0;
+                        let endTime = cmd.endTime;
                         stringEvents.push(new VerseSeparate((typeof cmd.endTime != 'undefined')
                         ? Parser.parsePlaytimeDuration(endTime).reduce((a,b) => a+b.time,0) : 0));
                     }else{
-                        stringEvents.push(new LineSeparate());
+                        stringEvents.push(new LineSeparate(cmd.forceStartCount));
                     }
                 }break;
                 case 's':{

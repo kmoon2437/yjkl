@@ -44,7 +44,7 @@ function classifyHeader(headers){
     return classified;
 }
 
-function convertLine(line){
+function convertLine(line,forceStartCount){
     //console.log(line.txt);
     // 음절 나누기(ruby와 body가 따로 분리되어 있음)
     let syllables = line.syllables = Parser.parseSentence(line.txt);
@@ -93,6 +93,7 @@ function convertLine(line){
         }
     }
     line.data = lineData;
+    line.forceStartCount = forceStartCount;
     return line;
 }
 
@@ -155,7 +156,6 @@ module.exports = class Converter{
                 : CommandConverter.parseCommandWithPlaytimeDuration(commands,classifiedHeaders);
             }break;
         }
-
         if(true){
             let first = true;
             let initialVerse = {
@@ -171,14 +171,16 @@ module.exports = class Converter{
             };
             let verse = cloneObject(initialVerse);
             let line = cloneObject(initialLine);
+            let forceStartCount = false;
 
             for(var event of stringEvents){
                 if(event instanceof LineSeparate){
-                    verse.lines.push(convertLine(line));
+                    verse.lines.push(convertLine(line,forceStartCount));
+                    forceStartCount = event.forceStartCount;
                     line = cloneObject(initialLine);
                 }else if(event instanceof VerseSeparate){
                     first = true;
-                    verse.lines.push(convertLine(line));
+                    verse.lines.push(convertLine(line,forceStartCount));
                     line = cloneObject(initialLine);
                     verse.onEndHideDelay = event.hideDelay;
                     verses.push(verse);
@@ -196,18 +198,14 @@ module.exports = class Converter{
                 }
             }
             if(line.data.length){
-                verse.lines.push(convertLine(line));
+                verse.lines.push(convertLine(line,forceStartCount));
                 line = cloneObject(initialLine);
             }
-
+            
             if(verse.lines.length){
-                first = true;
-                if(line.length) verse.lines.data.push(line);
-
-                line = cloneObject(initialLine);
                 verses.push(verse);
             }
-        }
+        } // 이거 if문 닫는거임(if(true){} 꼴)
         
         // BPMChanges 헤더에 값이 있으면 파싱한 뒤 그에 맞춰 밀리초로 변환
         // 형식:'시간:bpm,시간:bpm,시간:bpm,....'
@@ -247,6 +245,13 @@ module.exports = class Converter{
                     }
                 }
             }
+            function getBPM(time){
+                for(let g of revbpmlist){
+                    if(g.time < time){
+                        return g.bpm;
+                    }
+                }
+            }
             //console.log('progress C');
             for(let i in verses){
                 let startPoint = verses[i].lines[0].data[0].start;
@@ -257,6 +262,7 @@ module.exports = class Converter{
                 }
                 for(let j in verses[i].lines){
                     for(let k in verses[i].lines[j].data){
+                        verses[i].lines[j].data[k].currentBPM = getBPM(verses[i].lines[j].data[k].start);
                         verses[i].lines[j].data[k].start = convf(verses[i].lines[j].data[k].start);
                         verses[i].lines[j].data[k].end = convf(verses[i].lines[j].data[k].end);
                         if(verses[i].lines[j].data[k].splitTimes){
@@ -343,6 +349,13 @@ module.exports = class Converter{
                     lineCode:'b',
                     data:verse.lines[1]
                 });
+                if(verse.lines[1].forceStartCount){
+                    let beat2 = convertedResult.headers.useMsec ? 60000/verse.lines[1].data[0].currentBPM : classifiedHeaders.meta['ticks-per-beat'];
+                    let startTime = verse.lines[1].data[0].start;
+                    for(let i = 0;i < 5;i++){
+                        events.add(startTime-(beat2*i),'countdown',{ val:i || null,bottom:true });
+                    }
+                }
                 let lines = [...verse.lines];
                 lines.shift();
 
@@ -355,6 +368,13 @@ module.exports = class Converter{
                         lineCode:lineCode ? 'a' : 'b',
                         data:lines[i]
                     });
+                    if(verse.lines[i].forceStartCount){
+                        let beat2 = convertedResult.headers.useMsec ? 60000/verse.lines[i].data[0].currentBPM : classifiedHeaders.meta['ticks-per-beat'];
+                        let startTime = verse.lines[i].data[0].start;
+                        for(let i = 0;i < 5;i++){
+                            events.add(startTime-(beat2*i),'countdown',{ val:i || null,bottom:!lineCode });
+                        }
+                    }
                     lineCode = !lineCode;
                 }
                 let endTime = lastEndTime = [...([...verse.lines].reverse()[0]).data].reverse()[0].end+verse.onEndHideDelay;
