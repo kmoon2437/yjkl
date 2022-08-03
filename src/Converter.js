@@ -296,11 +296,7 @@ module.exports = class Converter{
             let firstRender = startTime;
             let beat;
             
-            if(convertedResult.headers.useMsec){
-                beat = 60000/verse.startBPM;
-            }else{
-                beat = classifiedHeaders.meta['ticks-per-beat'];
-            }
+            beat = 60000/verse.startBPM;
 
             let bbb = {
                 n3:first ? 16 : 10,
@@ -326,21 +322,12 @@ module.exports = class Converter{
             events.add(startTime,'countdown',{ val:null,bottom });
             
             let tpb = classifiedHeaders.meta['ticks-per-beat'];
-            if(convertedResult.headers.useMsec){
-                let initialMinus = 200;
-                let minus = initialMinus;
-                if(ganjuDuration > 25000 && first) minus = Math.min(6000,ganjuDuration/2);
-                if(verse.waitTime) minus = Math.max(verse.waitTime,initialMinus);
-                firstRender = Math.max(firstRender-minus,0);
-                verseRange[0] = firstRender-10;
-            }else{
-                let initialMinus = tpb/2;
-                let minus = initialMinus;
-                if(ganjuDuration > tpb*40 && first) minus = Math.min(tpb*8,ganjuDuration/2);
-                if(verse.waitTime) minus = Math.max(verse.waitTime,initialMinus);
-                firstRender = Math.max(firstRender-minus,0);
-                verseRange[0] = firstRender-1;
-            }
+            let initialMinus = 200;
+            let minus = initialMinus;
+            if(ganjuDuration > 25000 && first) minus = Math.min(6000,ganjuDuration/2);
+            if(verse.waitTime) minus = Math.max(verse.waitTime,initialMinus);
+            firstRender = Math.max(firstRender-minus,0);
+            verseRange[0] = firstRender-10;
             
             if(verse.lines.length < 2){
                 events.add(firstRender,'renderlyrics',{
@@ -354,12 +341,12 @@ module.exports = class Converter{
                     lineCode:'a',
                     data:verse.lines[0]
                 });
-                events.add(firstRender+(convertedResult.headers.useMsec ? 125 : tpb/4),'renderlyrics',{
+                events.add(firstRender+125,'renderlyrics',{
                     lineCode:'b',
                     data:verse.lines[1]
                 });
                 if(verse.lines[1].forceStartCount){
-                    let beat2 = convertedResult.headers.useMsec ? 60000/verse.lines[1].data[0].currentBPM : classifiedHeaders.meta['ticks-per-beat'];
+                    let beat2 = 60000/verse.lines[1].data[0].currentBPM;
                     let startTime = verse.lines[1].data[0].start;
                     for(let i = 0;i < 5;i++){
                         events.add(startTime-(beat2*i),'countdown',{ val:i || null,bottom:true });
@@ -378,7 +365,7 @@ module.exports = class Converter{
                         data:lines[i]
                     });
                     if(verse.lines[i].forceStartCount){
-                        let beat2 = convertedResult.headers.useMsec ? 60000/verse.lines[i].data[0].currentBPM : classifiedHeaders.meta['ticks-per-beat'];
+                        let beat2 = 60000/verse.lines[i].data[0].currentBPM;
                         let startTime = verse.lines[i].data[0].start;
                         for(let i = 0;i < 5;i++){
                             events.add(startTime-(beat2*i),'countdown',{ val:i || null,bottom:!lineCode });
@@ -396,15 +383,16 @@ module.exports = class Converter{
 
         let keys = Object.keys(events.getAll());
         let firsteventtime = Math.min(...keys);
-        if(convertedResult.headers.useMsec){
-            firsteventtime = Math.max(firsteventtime-1500,0);
-        }else{
+        firsteventtime = Math.max(firsteventtime-1500,0);
+        //if(convertedResult.headers.useMsec){
+        /*}else{
+            // useMsec이 항상 true로 나오므로 if문이 의미가 없어짐
             firsteventtime = Math.max(firsteventtime-(classifiedHeaders.meta['ticks-per-beat']*1.75),0);
-        }
-        // 이벤트 추가는 이렇게 했지만 이 시간에 도달하지 않아도
-        // 재생후 10초가 되면 cleangui를 자동으로 실행해야 됨
+        }*/
+
+        // 재생후 firsteventtime에 도달하지 않아도 10초가 되면 cleangui 실행
         // 참고로 cleangui는 제목 숨기기 이벤트
-        events.add(firsteventtime,'cleangui',{},true);
+        events.add(Math.min(10000,firsteventtime),'cleangui',{},true);
         events.add(0,'hidelyrics',{},true);
 
         if(classifiedHeaders.media == 'yjk-mv' || classifiedHeaders.media == 'midi-mv' || classifiedHeaders.media == 'mr-mv'){
