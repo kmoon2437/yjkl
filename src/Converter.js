@@ -102,7 +102,10 @@ const defaultOptions = {
 };
 
 module.exports = class Converter{
-    static convert(data,opts = {}){
+    static convert(data,opts){
+        opts = Object.assign({
+            enableMsec:false
+        },opts);
         var { headers,commands } = Parser.parse(data);
         var classifiedHeaders = classifyHeader(headers);
         var events = new Events();
@@ -139,10 +142,12 @@ module.exports = class Converter{
             rawHeaders:headers
         };
         
-        convertedResult.headers.useMsec = !((classifiedHeaders.media.startsWith('midi')
-        || classifiedHeaders.media.startsWith('yjk')) || classifiedHeaders.otherHeaders['tempo-changes']);
+        /*convertedResult.headers.useMsec = !((classifiedHeaders.media.startsWith('midi')
+        || classifiedHeaders.media.startsWith('yjk')) || classifiedHeaders.otherHeaders['tempo-changes']);*/
+        convertedResult.headers.useMsec = !(classifiedHeaders.otherHeaders['tempo-changes']);
+        let isMidi = (classifiedHeaders.media.startsWith('midi') || classifiedHeaders.media.startsWith('yjk'));
 
-        switch(classifiedHeaders.meta['timing-type']){
+        /*switch(classifiedHeaders.meta['timing-type']){
             case 'std-duration':{
                 convertedResult.headers.useMsec = true;
                 stringEvents = CommandConverter.parseCommandWithStdDuration(commands,classifiedHeaders);
@@ -155,7 +160,11 @@ module.exports = class Converter{
                 ? CommandConverter.parseCommandWithStdDuration(commands,classifiedHeaders)
                 : CommandConverter.parseCommandWithPlaytimeDuration(commands,classifiedHeaders);
             }break;
-        }
+        }*/
+        stringEvents = convertedResult.headers.useMsec
+        ? CommandConverter.parseCommandWithStdDuration(commands,classifiedHeaders,!isMidi || opts.enableMsec)
+        : CommandConverter.parseCommandWithPlaytimeDuration(commands,classifiedHeaders);
+
         if(true){
             let first = true;
             let initialVerse = {

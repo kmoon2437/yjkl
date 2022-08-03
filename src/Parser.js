@@ -378,11 +378,11 @@ module.exports = class Parser{
     }
 
     // 틱:밀리초
-    static parseStdDuration(time,bpm = 120,ticksPerBeat = 120){
+    static parseStdDuration(time,bpm = 120,ticksPerBeat = 120,enableMsec = true){
         let result = [];
         for(let dur of Parser.parsePlaytimeDuration(time)){
             let msec = 60000/bpm*(dur.time/ticksPerBeat);
-            if(dur.time2) msec += dur;
+            if(enableMsec && dur.time2) msec += dur;
             result.push(new MsDuration(msec,dur.ratio,dur.stakato));
         }
         return result;
