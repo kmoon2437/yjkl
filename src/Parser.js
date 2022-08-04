@@ -104,7 +104,11 @@ module.exports = class Parser{
                     cmd.timings = cc;
                 break;
                 case 'l':
-                    cmd.end = cc[0] == LINE_END || !Number.isNaN(parseFloat(cc[0]));
+                    cmd.end = cc[0] == LINE_END || (() => {
+                        if(!cc[0]) return false;
+                        let [ tick,ms ] = cc[0].split(':');
+                        return !Number.isNaN(parseFloat(tick)) && (!ms || !Number.isNaN(parseFloat(ms)));
+                    })();
                     if(cmd.end) cmd.endTime = cc[0] == LINE_END ? 0 : cc[0];
                     cmd.forceStartCount = cc[0] == FORCE_START_COUNT;
                 break;
@@ -382,7 +386,7 @@ module.exports = class Parser{
         let result = [];
         for(let dur of Parser.parsePlaytimeDuration(time)){
             let msec = 60000/bpm*(dur.time/ticksPerBeat);
-            if(enableMsec && dur.time2) msec += dur;
+            if(enableMsec && dur.time2) msec += dur.time2;
             result.push(new MsDuration(msec,dur.ratio,dur.stakato));
         }
         return result;
