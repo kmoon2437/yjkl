@@ -3,7 +3,7 @@ const Parser = require('./Parser');
 const {
     LineSeparate,VerseSeparate,
     SetLineProperty,SetVerseProperty,
-    TimingEvent
+    TimingEvent,ChangeBPM
 } = require('./util_classes');
 
 const STAKATO_MS = 10;
@@ -29,13 +29,13 @@ module.exports = class CommandConverter{
                             bpm = Parser.parseNumber(args[0]);
                         }break;
                         case 'show':{
-                            stringEvents.push(new SetVerseProperty('waitTime',Parser.parseStdDuration(args[0],bpm,ticksPerBeat,enableMsec).reduce((a,b) => a+b.ms,0)));
+                            stringEvents.push(new SetVerseProperty('waitTime',Parser.parseStdDuration(args[0],bpm,ticksPerBeat,enableMsec,false).reduce((a,b) => a+b.ms,0)));
                         }break;
                         case 'count':{
                             stringEvents.push(new SetVerseProperty('count',parseInt(args[0],10)));
                         }break;
                         case 'delay':{
-                            playtime += Parser.parseStdDuration(args[0],bpm,ticksPerBeat,enableMsec).reduce((a,b) => a+b.ms,0);
+                            playtime += Parser.parseStdDuration(args[0],bpm,ticksPerBeat,enableMsec,false).reduce((a,b) => a+b.ms,0);
                         }break;
                         case 'delay_ms':{
                             if(enableMsec) playtime += Parser.parseNumber(args[0]);
@@ -43,7 +43,7 @@ module.exports = class CommandConverter{
                     }
                 }break;
                 case 'd':{
-                    playtime += Parser.parseStdDuration(cmd.delay,bpm,ticksPerBeat,enableMsec).reduce((a,b) => a+b.ms,0);
+                    playtime += Parser.parseStdDuration(cmd.delay,bpm,ticksPerBeat,enableMsec,false).reduce((a,b) => a+b.ms,0);
                 }break;
                 case 't':{
                     cmd.timings.forEach(time => {
@@ -51,21 +51,33 @@ module.exports = class CommandConverter{
                         let parsed = Parser.parseStdDuration(time,bpm,ticksPerBeat,enableMsec);
                         let splitTimes = [];
                         let splitRatio = [];
+                        let notChangedBPM = bpm;
+                        let addNextTiming = false;
                         parsed.forEach(a => {
-                            splitTimes.push(playtime += a.ms);
-                            splitRatio.push(a.ratio);
+                            if(a instanceof ChangeBPM){
+                                bpm = a.bpm;
+                                addNextTiming = a.addNextTiming;
+                            }else{
+                                if(addNextTiming){
+                                    splitTimes[splitTimes.length-1] += (playtime += a.ms);
+                                    addNextTiming = false;
+                                }else{
+                                    splitTimes.push(playtime += a.ms);
+                                    splitRatio.push(a.ratio);
+                                }
+                            }
                         });
                         splitTimes.pop();
                         //playtime += parsed.ms;
                         let end = parsed[parsed.length-1].stakato ? (splitTimes[splitTimes.length-1] || start)+STAKATO_MS : playtime;
-                        stringEvents.push(new TimingEvent(Math.round(start),Math.round(end),bpm,splitTimes,splitRatio));
+                        stringEvents.push(new TimingEvent(Math.round(start),Math.round(end),notChangedBPM,splitTimes,splitRatio));
                     });
                 }break;
                 case 'l':{
                     if(cmd.end){
                         let endTime = cmd.endTime;
                         stringEvents.push(new VerseSeparate((typeof cmd.endTime != 'undefined')
-                        ? Parser.parseStdDuration(endTime,bpm,ticksPerBeat,enableMsec).reduce((a,b) => a+b.ms,0) : 0));
+                        ? Parser.parseStdDuration(endTime,bpm,ticksPerBeat,enableMsec,false).reduce((a,b) => a+b.ms,0) : 0));
                     }else{
                         stringEvents.push(new LineSeparate(cmd.forceStartCount));
                     }

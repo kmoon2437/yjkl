@@ -6,8 +6,9 @@
  * Parser.parseDuration() 용
  */
 class ChangeBPM{
-    constructor(bpm){
+    constructor(bpm,addNextTiming){
         this.bpm = bpm;
+        this.addNextTiming = addNextTiming;
     }
 }
 

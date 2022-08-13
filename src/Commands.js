@@ -8,8 +8,7 @@ var opts = {};
 opts['bpm'] = [];
 
 /*
- * duration: 해당 절의 가사가 시작하기 얼마나 전에 가사를 표시할지 설정
- * timing: 해당 절의 가사를 언제 표시할지 설정
+ * 해당 절의 가사가 시작하기 얼마나 전에 가사를 표시할지 설정
 */
 opts['show'] = [];
 
@@ -19,12 +18,12 @@ opts['show'] = [];
 opts['count'] = [];
 
 /*
- * 틱단위로 delay를 넣음
+ * 틱단위로 delay를 넣음(d 숫자 로 대체됨)
 */
 opts['delay'] = [];
 
 /*
- * delay와 같으나 밀리초단위
+ * delay와 같으나 (mr반주 전용)
 */
 opts['delay_ms'] = [];
 
