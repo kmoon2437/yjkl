@@ -14,6 +14,7 @@ const SPACE_REGEX = /[\u0020\u00a0\u3000]+/g; // \u0020(일반 띄어쓰기)와 
 const SPECIAL_CHARS = [FORCE_SPLIT,CONNECT_SYLLABLES,SPLIT_ALPHABET];
 const TYPE_BRACKET_OPEN = '(';
 const TYPE_BRACKET_CLOSE = ')';
+const WORD_RUBY = ':';
 const COMMENT_REGEX1 = /\/\/.*/g; // 한줄 주석
 const COMMENT_REGEX2 = /\/\*(.*?)\*\//gs; /* 여러줄 주석 */
 //const SPECIAL_CHARS2 = [CONNECT_SYLLABLES,SPLIT_ALPHABET];
@@ -429,7 +430,9 @@ module.exports = class Parser{
             str:'',
             beforeLength:0,
             afterLength:0,
-            bodyBlockClosed:false
+            bodyBlockClosed:false,
+            alphabetLength:0,
+            alphabetRuby:false
         };
         let specialChars = [...SPECIAL_CHARS,TYPE_BRACKET_OPEN,TYPE_BRACKET_CLOSE];
         for(let i in text){
@@ -446,10 +449,17 @@ module.exports = class Parser{
                 if(status.body) throw new SyntaxError(`Already opened the body block at position ${i} (character: '${chr}')`);
                 if(i == 0) throw new SyntaxError(`Invalid syntax at position ${i} (character: '${chr}')`);
 
-                // 1글자에만 루비를 지정하는 경우
                 if(!status.bodyBlockClosed){
-                    status.beforeLength--;
-                    status.afterLength = 1;
+                    if(status.alphabetRuby){
+                        //알파벳 하나를 묶어서 루비를 지정하는 경우
+                        status.alphabetRuby = false;
+                        status.beforeLength -= status.alphabetLength;
+                        status.afterLength = status.alphabetLength;
+                    }else{
+                        // 1글자에만 루비를 지정하는 경우
+                        status.beforeLength--;
+                        status.afterLength = 1;
+                    }
                 }
                 status.bodyBlockClosed = false;
                 status.ruby = chr;
@@ -468,14 +478,26 @@ module.exports = class Parser{
             }else{
                 if(status.ruby){
                     status.rubyContent += chr;
+                }else if(chr == ESCAPE){
+                    status.escape = true;
+                }else if(chr == WORD_RUBY && !status.body && !status.escape){
+                    status.alphabetRuby = true;
                 }else{
                     body += chr;
                     if(specialChars.indexOf(chr) < 0){
                         if(status.body) status.afterLength++;
-                        else status.beforeLength++;
+                        else{
+                            status.beforeLength++;
+                            if(ALPHABETS.indexOf(chr) >= 0){
+                                status.alphabetLength++;
+                            }else{
+                                status.alphabetLength = 0;
+                            }
+                        }
                     }
                 }
             }
+            if(chr != ESCAPE) status.escape = false;
         }
 
         let bodyArr = [];
