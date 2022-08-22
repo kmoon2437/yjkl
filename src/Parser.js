@@ -455,6 +455,7 @@ module.exports = class Parser{
                         status.alphabetRuby = false;
                         status.beforeLength -= status.alphabetLength;
                         status.afterLength = status.alphabetLength;
+                        status.alphabetLength = 0;
                     }else{
                         // 1글자에만 루비를 지정하는 경우
                         status.beforeLength--;
