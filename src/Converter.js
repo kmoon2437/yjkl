@@ -325,7 +325,11 @@ module.exports = class Converter{
             let initialMinus = 200;
             let minus = initialMinus;
             if(ganjuDuration > 25000 && first) minus = Math.min(6000,ganjuDuration/2);
-            if(verse.waitTime) minus = Math.max(verse.waitTime,initialMinus);
+            if(verse.waitTime){
+                minus = Math.max(
+                    verse.waitTime-(verse.lines[0].data[0].start-firstRender)
+                    ,initialMinus);
+            }
             firstRender = Math.max(firstRender-minus,0);
             verseRange[0] = firstRender-10;
             
