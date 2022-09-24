@@ -18,7 +18,7 @@ const TYPE_BRACKET_CLOSE = ')';
 const WORD_RUBY = ':';
 const COMMENT_REGEX1 = /\/\/.*/g; // 한줄 주석
 const COMMENT_REGEX2 = /\/\*(.*?)\*\//gs; /* 여러줄 주석 */
-const NUMBER_ALLOWED = '0123456789+-*/()^';
+const NUMBER_ALLOWED = '0123456789.+-*/()^';
 //const SPECIAL_CHARS2 = [CONNECT_SYLLABLES,SPLIT_ALPHABET];
 const SPECIAL_CHARS3 = [...Object.keys(BODY_BLOCK),TYPE_BRACKET_OPEN];
 //const SPECIAL_CHARS4 = [...Object.values(BODY_BLOCK),')'];
@@ -269,6 +269,7 @@ module.exports = class Parser{
         for(let chr of num){
             if(NUMBER_ALLOWED.indexOf(chr) > -1) n += chr;
         }
+        console.log(n);
         return mathjs.evaluate(n);
     }
     
