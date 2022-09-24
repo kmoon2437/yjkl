@@ -1,4 +1,5 @@
 const { Duration,MsDuration,ChangeBPM } = require('./util_classes');
+const mathjs = require('mathjs');
 
 const ALPHABETS = require('./alphabets'); // 영어,라틴문자,키릴문자,그리스문자 등등등
 const WIDTH_CONVERT_TABLE = require('./width_convert');
@@ -17,6 +18,7 @@ const TYPE_BRACKET_CLOSE = ')';
 const WORD_RUBY = ':';
 const COMMENT_REGEX1 = /\/\/.*/g; // 한줄 주석
 const COMMENT_REGEX2 = /\/\*(.*?)\*\//gs; /* 여러줄 주석 */
+const NUMBER_ALLOWED = '0123456789+-*/()^';
 //const SPECIAL_CHARS2 = [CONNECT_SYLLABLES,SPLIT_ALPHABET];
 const SPECIAL_CHARS3 = [...Object.keys(BODY_BLOCK),TYPE_BRACKET_OPEN];
 //const SPECIAL_CHARS4 = [...Object.values(BODY_BLOCK),')'];
@@ -261,45 +263,15 @@ module.exports = class Parser{
     
         return syllables; // 잘린 거
     }
-
-    static #parseMathExpression(num){
-        let expression = [''];
-        for(let chr of num){
-            // 공백
-            if(!chr.trim()) break;
     
-            if(chr.match(/[0-9.]/)){ // 숫자
-                if(!expression[expression.length-1]) expression[expression.length-1] = '';
-                expression[expression.length-1] += chr;
-            }else if(chr.match(/[\+\-\*\/]/)){ // (사칙)연산자
-                expression.push({ operator:chr },'');
-            }else{
-                throw new SyntaxError('Unexpected operator');
-            }
+    static #parseMathExpression(num){
+        let n = '';
+        for(let chr of num){
+            if(NUMBER_ALLOWED.indexOf(chr) > -1) n += chr;
         }
-        //console.log(expression);
-        let result = 0;
-        let operator = '+';
-        for(let n of expression){
-            if(n.operator){
-                if(operator) throw new SyntaxError('Unexpected operator2');
-                operator = n.operator;
-            }else{
-                if(operator == '+'){
-                    result += parseFloat(n);
-                }else if(operator == '-'){
-                    result -= n;
-                }else if(operator == '*'){
-                    result *= n;
-                }else if(operator == '/'){
-                    result /= n;
-                }
-                operator = '';
-            }
-        }
-        return result;
+        return mathjs.evaluate(n);
     }
-
+    
     static parseNumber(num){
         if(typeof num == 'number') return num;
         else if(typeof num == 'string'){
@@ -355,8 +327,8 @@ module.exports = class Parser{
             tick2.shift();
             tick = tick2.join('');
         }
-        tick = Parser.#parseMathExpression(tick);
-        if(ms) ms = Parser.#parseMathExpression(ms);
+        tick = this.#parseMathExpression(tick);
+        if(ms) ms = this.#parseMathExpression(ms);
         return new Duration(ms ? [tick,ms] : tick,ratioo,stakato);
     }
 
