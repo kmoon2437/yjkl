@@ -269,7 +269,7 @@ module.exports = class Parser{
         for(let chr of num){
             if(NUMBER_ALLOWED.indexOf(chr) > -1) n += chr;
         }
-        console.log(n);
+        // console.log(n);
         return mathjs.evaluate(n);
     }
     
