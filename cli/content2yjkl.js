@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * ZXEKaraoke Lines Converter
+ * YJKaraoke Lines Converter
  */
 
 const fs = require('fs');
@@ -11,7 +11,7 @@ const Lyrics = require('../index');
 program
 .version(require('../package.json').version, '-v, --version')
 .usage('<input file> <output file>')
-.description('Convert midi file to zk file')
+.description('Convert lyrics data(*.txt file) to yjkl file')
 .parse(process.argv);
 
 let [ inputfile,outputfile ] = program.args;
@@ -32,7 +32,6 @@ const PREPROCESS_REGEX = /^#([0-9a-zA-Z_$]+?)( *?)(.*?)$/g;
 
 const input = fs.readFileSync(inputfile,'utf8').replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n\n');
 let output = `File-midi: // 적당한 파일명을 지정하세요. 이 부분을 사용하지 않는다면 지워도 좋습니다.
-File-yjk: // 적당한 파일명을 지정하세요. 이 부분을 사용하지 않는다면 지워도 좋습니다.
 File-album: // 적당한 파일명을 지정하세요. 이 부분을 사용하지 않는다면 지워도 좋습니다.
 File-mr: // 적당한 파일명을 지정하세요. 이 부분을 사용하지 않는다면 지워도 좋습니다.
 File-mv: // 적당한 파일명을 지정하세요. 이 부분을 사용하지 않는다면 지워도 좋습니다.
@@ -86,6 +85,9 @@ for(let verse of input){
                     case 'p': output += `\np ${value}`; break;
                 }
             }
+        }else if(sentence2.startsWith('(') && sentence2.endsWith(')')){
+            output += `\np -1`;
+            sentence2 = sentence2.slice(1,-1);
         }
 
         output += `\ns ${sentence2}`;
