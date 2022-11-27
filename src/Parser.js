@@ -16,6 +16,8 @@ const SPECIAL_CHARS = [FORCE_SPLIT,CONNECT_SYLLABLES,SPLIT_ALPHABET];
 const TYPE_BRACKET_OPEN = '(';
 const TYPE_BRACKET_CLOSE = ')';
 const WORD_RUBY = ':';
+const CHANGE_TYPE_START = '@';
+const CHANGE_TYPE_END = ';';
 const COMMENT_REGEX1 = /\/\/.*/g; // 한줄 주석
 const COMMENT_REGEX2 = /\/\*(.*?)\*\//gs; /* 여러줄 주석 */
 const NUMBER_ALLOWED = '0123456789.+-*/()^';
@@ -50,15 +52,13 @@ function strReplaceAll(str,a,b){
             str = strReplaceAll(str,a[Math.min(i,a.length-1)],b[Math.min(i,b.length-1)]);
         }
     }else{
-        while(str.indexOf(a) > -1){
-            str = str.replace(a,b);
-        }
+        str = str.replaceAll(a,b);
     }
     return str;
 }
 
 module.exports = class Parser{
-    static ALPHABET_REGEX = /(['a-zA-Z])/;
+    static USE_DEFAULT_TYPE = 'default';
 
     static parse(data){
         // 버퍼일수도 있으니 문자열로 변환
@@ -148,6 +148,7 @@ module.exports = class Parser{
         let result = [];
         let srcObj = {
             bracketed:false,
+            currentType:this.USE_DEFAULT_TYPE,
             body:''
         };
         function o(str){
@@ -159,6 +160,7 @@ module.exports = class Parser{
             let txt = parsed[i];
             
             srcObj.bracketed = txt.bracketed;
+            srcObj.currentType = txt.currentType;
             for(let j in txt.body){
                 // 현재 문자와 이전 문자 결정
                 let chr = txt.body[j];
@@ -240,7 +242,7 @@ module.exports = class Parser{
 
     static parseSentence(sentence){
         sentence = sentence.replace(SPACE_REGEX,' '); // 띄어쓰기가 여러개 있던걸 한개로 변환
-        let syllables = Parser.parseRubySyntax(sentence);
+        let syllables = Parser.parseRubySyntax(sentence); //console.log(syllables)
         if(sentence.match(FORCE_SPLIT)){
             syllables.body = Parser.splitSentenceBySlash(syllables.body);
         }else{
@@ -405,9 +407,10 @@ module.exports = class Parser{
             afterLength:0,
             bodyBlockClosed:false,
             alphabetLength:0,
-            alphabetRuby:false
+            alphabetRuby:false,
+            dontCountLength:false
         };
-        let specialChars = [...SPECIAL_CHARS,TYPE_BRACKET_OPEN,TYPE_BRACKET_CLOSE];
+        let specialChars = [...SPECIAL_CHARS,TYPE_BRACKET_OPEN,TYPE_BRACKET_CLOSE,CHANGE_TYPE_START,CHANGE_TYPE_END];
         for(let i in text){
             let chr = text[i];
             if(BODY_BLOCK[chr]){
@@ -457,8 +460,10 @@ module.exports = class Parser{
                 }else if(chr == WORD_RUBY && !status.body && !status.escape){
                     status.alphabetRuby = true;
                 }else{
+                    if(chr == CHANGE_TYPE_START) status.dontCountLength = true;
+                    else if(chr == CHANGE_TYPE_END) status.dontCountLength = false;
                     body += chr;
-                    if(specialChars.indexOf(chr) < 0){
+                    if(specialChars.indexOf(chr) < 0 && !status.dontCountLength){
                         if(status.body) status.afterLength++;
                         else{
                             status.beforeLength++;
@@ -476,159 +481,32 @@ module.exports = class Parser{
 
         let bodyArr = [];
         let bracketed = false;
+        let currentType = this.USE_DEFAULT_TYPE;
+        let isInCurrentType = false;
         let bodyContent = '';
         for(let chr of body){
             if(chr == TYPE_BRACKET_OPEN){
-                if(bodyContent) bodyArr.push({ bracketed,body:bodyContent });
+                if(bodyContent) bodyArr.push({ bracketed,currentType,body:bodyContent });
                 bracketed = true;
                 bodyContent = '';
             }else if(chr == TYPE_BRACKET_CLOSE){
-                if(bodyContent) bodyArr.push({ bracketed,body:bodyContent });
+                if(bodyContent) bodyArr.push({ bracketed,currentType,body:bodyContent });
                 bracketed = false;
                 bodyContent = '';
+            }else if(chr == CHANGE_TYPE_START){
+                if(bodyContent) bodyArr.push({ bracketed,currentType,body:bodyContent });
+                bodyContent = '';
+                isInCurrentType = true;
+                currentType = '';
+            }else if(chr == CHANGE_TYPE_END){
+                isInCurrentType = false;
             }else{
-                bodyContent += chr;
+                if(isInCurrentType) currentType += chr;
+                else bodyContent += chr;
             }
         }
-        if(bodyContent) bodyArr.push({ bracketed,body:bodyContent });
+        if(bodyContent) bodyArr.push({ bracketed,currentType,body:bodyContent });
 
         return { ruby,body:bodyArr.filter(a => a.body) };
-    }
-
-    static parseRubySyntaxOld(text){ return null;
-        //this.status = [];
-        let blocks = [''];
-        let status = {
-            body:'',
-            ruby:'',
-            bodyBlockClosed:false
-        };
-        let data = {
-            body:'',
-            ruby:''
-        };
-        let specialChars = [...SPECIAL_CHARS,TYPE_BRACKET_OPEN];
-        for(let i in text){
-            let chr = text[i];
-            if(BODY_BLOCK[chr]){
-                if(status.body) throw new SyntaxError(`Already opened the body block at position ${i} (character: '${chr}')`);
-                if(status.ruby) throw new SyntaxError(`Already opened the ruby block at position ${i} (character: '${chr}')`);
-                status.body = chr;
-                //blocks.push([data.body,data.ruby]);
-                blocks.push({ ruby:data.ruby,length:strReplaceAll(data.body,specialChars,'').length },data.body);
-                data.body = '';
-                data.ruby = '';
-            }else if(chr == BODY_BLOCK[status.body]){
-                status.body = '';
-                status.bodyBlockClosed = true;
-            }else if(RUBY_BLOCK[chr]){
-                if(status.ruby) throw new SyntaxError(`Already opened the ruby block at position ${i} (character: '${chr}')`);
-                if(status.body) throw new SyntaxError(`Already opened the body block at position ${i} (character: '${chr}')`);
-                if(i == 0) throw new SyntaxError(`Invalid syntax at position ${i} (character: '${chr}')`);
-                if(!status.bodyBlockClosed){
-                    let str = data.body.slice(0,data.body.length-1);
-                    data.body = data.body[data.body.length-1];
-                    //console.log('str:',str,',data.body:',data.body);
-                    //blocks.push([str,'']);
-                    if(str.endsWith(TYPE_BRACKET_OPEN)){
-                        str = str.substring(0,str.length-1);
-                        data.body = TYPE_BRACKET_OPEN+data.body;
-                    }
-                    blocks[blocks.length-1] += str;
-                }
-                status.bodyBlockClosed = false;
-                status.ruby = chr;
-            }else if(status.bodyBlockClosed){
-                throw new SyntaxError(`Invalid syntax at position ${i} (character: '${chr}')`);
-            }else if(chr == RUBY_BLOCK[status.ruby]){
-                status.ruby = '';
-                //blocks.push([data.body,data.ruby]);
-                blocks.push({ beforeLength:null,ruby:data.ruby,length:strReplaceAll(data.body,specialChars,'').length },data.body);
-                data.body = '';
-                data.ruby = '';
-            }else{
-                if(status.ruby){
-                    data.ruby += chr;
-                }else{
-                    data.body += chr;
-                }
-            }
-            //this.status.push({ chr,status:{...status},data:{...data} });
-        }
-        if(data.body){
-            //blocks.puash([data.body,data.ruby]);
-            if(data.ruby) blocks.push({
-                beforeLength:null,ruby:data.ruby,length:strReplaceAll(data.body,specialChars,'').length
-            },data.body);
-            else blocks[blocks.length-1] += data.body;
-        }
-
-        blocks = blocks.reduce((a,b) => {
-            if(typeof b == 'string' && typeof a[a.length-1] == 'string') a[a.length-1] += b;
-            else a.push(b);
-            return a;
-        },[]).filter(a => typeof a == 'string' ? a : a.ruby);
-        
-        // 괄호 쳐진 부분은 따로 분리(bracketed로 괄호 안인지 판별)
-        let finalResult = {
-            ruby:[],
-            body:[]
-        };
-        let bracketed = false;
-        let beforeLength = 0;
-        for(let str of blocks){
-            if(typeof str != 'string'){
-                str.beforeLength = Math.max(0,beforeLength);
-                beforeLength = -str.length; // str은 문자열이 아니다
-                finalResult.ruby.push(str);
-                continue;
-            }
-            if(str.indexOf(TYPE_BRACKET_OPEN) > -1
-            || str.indexOf(TYPE_BRACKET_CLOSE) > -1){
-                let s = '';
-                for(let chr of str){
-                    if(chr == TYPE_BRACKET_OPEN){
-                        if(s){
-                            beforeLength += strReplaceAll(s,specialChars,'').length;
-                            finalResult.body.push({ bracketed,body:s });
-                        }
-                        bracketed = true;
-                        s = '';
-                    }else if(chr == TYPE_BRACKET_CLOSE){
-                        if(s){
-                            beforeLength += strReplaceAll(s,specialChars,'').length;
-                            finalResult.body.push({ bracketed,body:s });
-                        }
-                        bracketed = false;
-                        s = '';
-                    }else{
-                        s += chr;
-                    }
-                }
-                if(s){
-                    beforeLength += strReplaceAll(s,specialChars,'').length;
-                    finalResult.body.push({ bracketed,body:s });
-                }
-            }else{
-                beforeLength += strReplaceAll(str,specialChars,'').length;
-                finalResult.body.push({ bracketed,body:str });
-            }
-        }
-        
-        // bracketed 값이 같으면 합치기
-        finalResult.body = finalResult.body.reduce((a,b) => {
-            if(a[a.length-1]){
-                if(a[a.length-1].bracketed == b.bracketed){
-                    a[a.length-1].body += b.body;
-                }else{
-                    a.push(b);
-                }
-            }else{
-                a.push(b);
-            }
-            return a;
-        },[]);
-        
-        return finalResult;
     }
 }

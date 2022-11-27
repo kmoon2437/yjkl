@@ -103,10 +103,13 @@ const defaultOptions = {
 
 module.exports = class Converter{
     static convert(data,opts){
+        return this.convertParsed(Parser.parse(data),opts);
+    }
+    
+    static convertParsed({ headers,commands },opts){
         opts = Object.assign({
             enableMsec:false
         },opts);
-        var { headers,commands } = Parser.parse(data);
         var classifiedHeaders = classifyHeader(headers);
         var events = new Events();
         var stringEvents = null;
