@@ -387,6 +387,9 @@ module.exports = class Converter{
             verseRanges.push(verseRange);
             first = false;
         }
+        
+        events.add(verseRanges[verseRanges.length-1][1]+150,'showinfo',{});
+        events.add(verseRanges[verseRanges.length-1][1]+150+7500,'cleangui',{});
 
         let keys = Object.keys(events.getAll());
         let firsteventtime = Math.min(...keys);
