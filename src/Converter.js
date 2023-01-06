@@ -72,15 +72,13 @@ function convertLine(line,forceStartCount){
         }
         //console.log(oldData,syllables)
     }
-    // 가사를 중간에 멈출 수 없도록 막음
-    for(let i in oldData){ oldData[i].end = oldData[i-(-1)] ? oldData[i-(-1)].start : oldData[i].end; }
 
     // 타이밍 데이터에 직접 가사내용을 넣진 않음
-    for(let syll of syllables.body){
+    syllables.body.forEach((syll,i,sylls) => {
         if(syll.body == ' '){
             lineData.push({
                 start:lineData[lineData.length-1].end,
-                end:lineData[lineData.length-1].end
+                end:sylls[i+1] ? sylls[i+1].start : lineData[lineData.length-1].end
             });
         }else{
             try{
@@ -91,7 +89,11 @@ function convertLine(line,forceStartCount){
                 throw e;
             }
         }
-    }
+    });
+    
+    // 띄어쓰기가 아닌 곳에서 가사를 중간에 멈출 수 없도록 막음
+    for(let i in lineData){ lineData[i].end = lineData[i-(-1)] ? lineData[i-(-1)].start : lineData[i].end; }
+
     line.data = lineData;
     line.forceStartCount = forceStartCount;
     return line;
