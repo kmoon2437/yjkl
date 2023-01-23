@@ -9,6 +9,9 @@ const {
 const STAKATO_MS = 10;
 const STAKATO_TICK = 1;
 
+/**
+ * 아 이거 중복코드 언제 한번 합쳐야 되는데
+ */
 module.exports = class CommandConverter{
     // 기존 방식(기본값). tick 단위를 밀리초로 변환
     // tick 단위와 밀리초 단위를 같이 쓸수 있지만 bpm 수동지정 필수(기본bpm 120)
@@ -33,6 +36,11 @@ module.exports = class CommandConverter{
                         }break;
                         case 'count':{
                             stringEvents.push(new SetVerseProperty('count',parseInt(args[0],10)));
+                        }break;
+                        case 'flag':{
+                            for(let i in opts){
+                                stringEvents.push(new SetLineProperty(`flags:${i}`,opts[i]));
+                            }
                         }break;
                         case 'delay':{
                             playtime += Parser.parseStdDuration(args[0],bpm,ticksPerBeat,enableMsec,false).reduce((a,b) => a+b.ms,0);
@@ -114,6 +122,11 @@ module.exports = class CommandConverter{
                         }break;
                         case 'count':{
                             stringEvents.push(new SetVerseProperty('count',parseInt(args[0],10)));
+                        }break;
+                        case 'flag':{
+                            for(let i in opts){
+                                stringEvents.push(new SetLineProperty(`flags:${i}`,opts[i]));
+                            }
                         }break;
                         case 'delay':{
                             playtime += Parser.parsePlaytimeDuration(args[0]).reduce((a,b) => a+b.time,0);

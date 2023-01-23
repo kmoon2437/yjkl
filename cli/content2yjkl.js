@@ -31,11 +31,11 @@ const PARAM_PARSE_REGEX = /\[{(.+?)=(.+?)}\]/;
 const PREPROCESS_REGEX = /^#([0-9a-zA-Z_$]+?)( *?)(.*?)$/g;
 
 const input = fs.readFileSync(inputfile,'utf8').replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n\n');
-let output = `File-midi: // 적당한 파일명을 지정하세요. 이 부분을 사용하지 않는다면 지워도 좋습니다.
-File-album: // 적당한 파일명을 지정하세요. 이 부분을 사용하지 않는다면 지워도 좋습니다.
-File-mr: // 적당한 파일명을 지정하세요. 이 부분을 사용하지 않는다면 지워도 좋습니다.
-File-mv: // 적당한 파일명을 지정하세요. 이 부분을 사용하지 않는다면 지워도 좋습니다.
-MV-timing: // 뮤비 시작시간을 밀리초로 지정하세요. mv를 사용하지 않거나 기본값(0)으로 놔둘 거면 지워도 좋습니다.
+let output = `File-midi:midi.mid // 적당한 파일명을 지정하세요. 이 부분을 사용하지 않는다면 지워도 좋습니다.
+File-album:album.png
+File-mr:mr.ogg
+File-mv:mv.mkv
+MV-timing:0 // 뮤비 시작시간을 밀리초로 지정하세요. mv를 사용하지 않거나 기본값(0)으로 놔둘 거면 지워도 좋습니다.
 Meta-layout:0 // 일본곡인 경우 7을 입력하세요. 그 외에는 지워도 좋습니다.
 
 c bpm 0 // 적당한 bpm을 지정하세요.`;
@@ -77,17 +77,24 @@ for(let verse of input){
         let syllLength = Lyrics.Parser.parseSentence(sentence2).body.filter(a => a.body.trim()).length;
         if(!verseEnded) output += '\nl';
         verseEnded = false;
-        let matches;
+        let matches,isP,flags = [];
         if(matches = sentence.match(PARAM_REGEX)){
             for(let raw of matches){
                 let [ key,value ] = raw.match(PARAM_PARSE_REGEX).slice(1);
                 switch(key.toLowerCase()){
-                    case 'p': output += `\np ${value}`; break;
+                    case 'p': output += `\np ${value}`; isP = true; break;
+                    case 'flag': flags.push(value); break;
                 }
             }
-        }else if(sentence2.startsWith('(') && sentence2.endsWith(')')){
+        }
+        if(!isP && sentence2.startsWith('(') && sentence2.endsWith(')')){
             output += `\np -1`;
             sentence2 = sentence2.slice(1,-1);
+        }
+        
+        if(flags.length) output += `\nc flag`;
+        for(let flag of flags){
+            output += ` --${flag}`;
         }
 
         output += `\ns ${sentence2}`;

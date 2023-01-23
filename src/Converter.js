@@ -103,6 +103,10 @@ const defaultOptions = {
     headerOnly:false
 };
 
+const LINE_0 = 0;
+const LINE_1 = 1;
+const LINE_2 = 2;
+
 module.exports = class Converter{
     static convert(data,opts){
         return this.convertParsed(Parser.parse(data),opts);
@@ -340,18 +344,18 @@ module.exports = class Converter{
             
             if(verse.lines.length < 2){
                 events.add(firstRender,'renderlyrics',{
-                    lineCode:'b',
+                    lineCode:LINE_2,
                     data:verse.lines[0]
                 });
                 verseRange[1] = (verse.lines[0].data[verse.lines[0].data.length-1].end+verse.onEndHideDelay)+10;
                 events.add(lastEndTime = verse.lines[0].data[verse.lines[0].data.length-1].end+verse.onEndHideDelay,'hidelyrics',{});
             }else{
                 events.add(firstRender,'renderlyrics',{
-                    lineCode:'a',
+                    lineCode:LINE_1,
                     data:verse.lines[0]
                 });
-                events.add(firstRender+125,'renderlyrics',{
-                    lineCode:'b',
+                events.add(firstRender,'renderlyrics',{
+                    lineCode:LINE_2,
                     data:verse.lines[1]
                 });
                 if(verse.lines[1].forceStartCount){
@@ -362,15 +366,17 @@ module.exports = class Converter{
                     }
                 }
                 let lines = [...verse.lines];
-                lines.shift();
 
-                let first = true;
                 let lineCode = true; // true:a,false:b
                 for(var i in lines){
-                    if(first){ first = false; continue; }
+                    if(i < 2) continue;
                     if(!lines[i-1].data.length) continue;
-                    events.add(lines[i-1].data[0].start+(lines[i-1].data[0].end-lines[i-1].data[0].start)/2,'renderlyrics',{
-                        lineCode:lineCode ? 'a' : 'b',
+                    let renderTime = Math.max(
+                        lines[i-1].data[0].start+(lines[i-1].data[0].end-lines[i-1].data[0].start)/2,
+                        lines[i-2].data[lines[i-2].data.length-1].end
+                    );
+                    events.add(renderTime,'renderlyrics',{
+                        lineCode:lineCode ? LINE_1 : LINE_2,
                         data:lines[i]
                     });
                     if(verse.lines[i].forceStartCount){
