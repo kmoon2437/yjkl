@@ -51,7 +51,7 @@ function convertLine(line,forceStartCount){
     //console.log(syllables,line.txt);
     delete line.txt;
     let lineData = [];
-    let oldData = [...line.data];
+    let oldData = [...line.timings];
     
     // 음절에서 띄어쓰기(' ')를 제외한 length
     let slength = syllables.body
@@ -94,8 +94,8 @@ function convertLine(line,forceStartCount){
     // 띄어쓰기가 아닌 곳에서 가사를 중간에 멈출 수 없도록 막음
     for(let i in lineData){ lineData[i].end = lineData[i-(-1)] ? lineData[i-(-1)].start : lineData[i].end; }
 
-    line.data = lineData;
-    line.forceStartCount = forceStartCount;
+    line.timings = lineData;
+    line.legacy.forceStartCount = forceStartCount;
     return line;
 }
 
@@ -182,10 +182,11 @@ module.exports = class Converter{
                 lines:[]
             };
             let initialLine = {
-                type:0,
+                params:{},
                 sub:'',
-                data:[],
-                txt:''
+                timings:[],
+                txt:'',
+                legacy:{}
             };
             let verse = cloneObject(initialVerse);
             let line = cloneObject(initialLine);
@@ -204,7 +205,11 @@ module.exports = class Converter{
                     verses.push(verse);
                     verse = cloneObject(initialVerse);
                 }else if(event instanceof SetLineProperty){
-                    line[event.key] = event.val;
+                    if(event.key == 'type'){
+                        line.params.style = event.val;
+                    }else{
+                        line[event.key] = event.val;
+                    }
                 }else if(event instanceof SetVerseProperty){
                     verse[event.key] = event.val;
                 }else if(event instanceof TimingEvent){
@@ -212,10 +217,10 @@ module.exports = class Converter{
                         verse.startBPM = event.currentBPM;
                         first = false;
                     }
-                    line.data.push(event);
+                    line.timings.push(event);
                 }
             }
-            if(line.data.length){
+            if(line.timings.length){
                 verse.lines.push(convertLine(line,forceStartCount));
                 line = cloneObject(initialLine);
             }
@@ -272,19 +277,19 @@ module.exports = class Converter{
             }
             //console.log('progress C');
             for(let i in verses){
-                let startPoint = verses[i].lines[0].data[0].start;
+                let startPoint = verses[i].lines[0].timings[0].start;
                 for(let j of revbpmlist){
                     if(j.time < startPoint){
                         verses[i].startBPM = j.bpm; break;
                     }
                 }
                 for(let j in verses[i].lines){
-                    for(let k in verses[i].lines[j].data){
-                        verses[i].lines[j].data[k].currentBPM = getBPM(verses[i].lines[j].data[k].start);
-                        verses[i].lines[j].data[k].start = convf(verses[i].lines[j].data[k].start);
-                        verses[i].lines[j].data[k].end = convf(verses[i].lines[j].data[k].end);
-                        if(verses[i].lines[j].data[k].splitTimes){
-                            verses[i].lines[j].data[k].splitTimes = verses[i].lines[j].data[k].splitTimes.map(a => {
+                    for(let k in verses[i].lines[j].timings){
+                        verses[i].lines[j].timings[k].currentBPM = getBPM(verses[i].lines[j].timings[k].start);
+                        verses[i].lines[j].timings[k].start = convf(verses[i].lines[j].timings[k].start);
+                        verses[i].lines[j].timings[k].end = convf(verses[i].lines[j].timings[k].end);
+                        if(verses[i].lines[j].timings[k].splitTimes){
+                            verses[i].lines[j].timings[k].splitTimes = verses[i].lines[j].timings[k].splitTimes.map(a => {
                                 return convf(a);
                             });
                         }
@@ -299,8 +304,8 @@ module.exports = class Converter{
         var first = true;
         for(var verse of verses){
             let startCount = 4;
-            let startTime = verse.lines[0].data[0].start;
-            let ganjuDuration = verse.lines[0].data[0].start-lastEndTime;
+            let startTime = verse.lines[0].timings[0].start;
+            let ganjuDuration = verse.lines[0].timings[0].start-lastEndTime;
             let verseRange = [0,0];
             let firstRender = startTime;
             let beat;
@@ -321,14 +326,14 @@ module.exports = class Converter{
             let bottom = verse.lines.length < 2;
             startCount = Math.round(Math.max(0,Math.min(verse.count,4))) || startCount;
             for(var i = 1;i <= startCount;i++){
-                events.add(startTime-(beat*i),'countdown',{ val:i < 0 || i > 4 ? null : i,bottom });
+                events.add(startTime-(beat*i),'countdown',{ val:i < 0 || i > 4 ? null : i,lineCode:bottom ? LINE_2 : LINE_1 });
                 firstRender = Math.min(firstRender,startTime-(beat*i));
             }
 
             for(var i = 1;i <= Math.max(0,4-startCount);i++){
-                events.add(firstRender-i*10,'countdown',{ val:i < startCount || i-startCount > 4 ? null : i-startCount,bottom });
+                events.add(firstRender-i*10,'countdown',{ val:i < startCount || i-startCount > 4 ? null : i-startCount,lineCode:bottom ? LINE_2 : LINE_1 });
             }
-            events.add(startTime,'countdown',{ val:null,bottom });
+            events.add(startTime,'countdown',{ val:null,lineCode:bottom ? LINE_2 : LINE_1 });
             
             let tpb = classifiedHeaders.meta['ticks-per-beat'];
             let initialMinus = 200;
@@ -336,33 +341,27 @@ module.exports = class Converter{
             if(ganjuDuration > 25000 && first) minus = Math.min(6000,ganjuDuration/2);
             if(verse.waitTime){
                 minus = Math.max(
-                    verse.waitTime-(verse.lines[0].data[0].start-firstRender)
+                    verse.waitTime-(verse.lines[0].timings[0].start-firstRender)
                     ,initialMinus);
             }
             firstRender = Math.max(firstRender-minus,0);
             verseRange[0] = firstRender-10;
             
             if(verse.lines.length < 2){
-                events.add(firstRender,'renderlyrics',{
-                    lineCode:LINE_2,
-                    data:verse.lines[0]
-                });
-                verseRange[1] = (verse.lines[0].data[verse.lines[0].data.length-1].end+verse.onEndHideDelay)+10;
-                events.add(lastEndTime = verse.lines[0].data[verse.lines[0].data.length-1].end+verse.onEndHideDelay,'hidelyrics',{});
+                verse.lines[0].lineCode = LINE_2;
+                events.add(firstRender,'renderlyrics',verse.lines[0]);
+                verseRange[1] = (verse.lines[0].timings[verse.lines[0].timings.length-1].end+verse.onEndHideDelay)+10;
+                events.add(lastEndTime = verse.lines[0].timings[verse.lines[0].timings.length-1].end+verse.onEndHideDelay,'hidelyrics',{});
             }else{
-                events.add(firstRender,'renderlyrics',{
-                    lineCode:LINE_1,
-                    data:verse.lines[0]
-                });
-                events.add(firstRender,'renderlyrics',{
-                    lineCode:LINE_2,
-                    data:verse.lines[1]
-                });
-                if(verse.lines[1].forceStartCount){
-                    let beat2 = 60000/verse.lines[1].data[0].currentBPM;
-                    let startTime = verse.lines[1].data[0].start;
+                verse.lines[0].lineCode = LINE_1;
+                verse.lines[1].lineCode = LINE_2;
+                events.add(firstRender,'renderlyrics',verse.lines[0]);
+                events.add(firstRender,'renderlyrics',verse.lines[1]);
+                if(verse.lines[1].legacy.forceStartCount){
+                    let beat2 = 60000/verse.lines[1].timings[0].currentBPM;
+                    let startTime = verse.lines[1].timings[0].start;
                     for(let i = 0;i < 5;i++){
-                        events.add(startTime-(beat2*i),'countdown',{ val:i || null,bottom:true });
+                        events.add(startTime-(beat2*i),'countdown',{ val:i || null,lineCode:LINE_2 });
                     }
                 }
                 let lines = [...verse.lines];
@@ -370,25 +369,23 @@ module.exports = class Converter{
                 let lineCode = true; // true:a,false:b
                 for(var i in lines){
                     if(i < 2) continue;
-                    if(!lines[i-1].data.length) continue;
+                    if(!lines[i-1].timings.length) continue;
                     let renderTime = Math.max(
-                        lines[i-1].data[0].start+(lines[i-1].data[0].end-lines[i-1].data[0].start)/2,
-                        lines[i-2].data[lines[i-2].data.length-1].end
+                        lines[i-1].timings[0].start+(lines[i-1].timings[0].end-lines[i-1].timings[0].start)/2,
+                        lines[i-2].timings[lines[i-2].timings.length-1].end
                     );
-                    events.add(renderTime,'renderlyrics',{
-                        lineCode:lineCode ? LINE_1 : LINE_2,
-                        data:lines[i]
-                    });
-                    if(verse.lines[i].forceStartCount){
-                        let beat2 = 60000/verse.lines[i].data[0].currentBPM;
-                        let startTime = verse.lines[i].data[0].start;
+                    lines[i].lineCode = lineCode ? LINE_1 : LINE_2;
+                    events.add(renderTime,'renderlyrics',lines[i]);
+                    if(verse.lines[i].legacy.forceStartCount){
+                        let beat2 = 60000/verse.lines[i].timings[0].currentBPM;
+                        let startTime = verse.lines[i].timings[0].start;
                         for(let i = 0;i < 5;i++){
-                            events.add(startTime-(beat2*i),'countdown',{ val:i || null,bottom:!lineCode });
+                            events.add(startTime-(beat2*i),'countdown',{ val:i || null,lineCode:lines[i].lineCode });
                         }
                     }
                     lineCode = !lineCode;
                 }
-                let endTime = lastEndTime = [...([...verse.lines].reverse()[0]).data].reverse()[0].end+verse.onEndHideDelay;
+                let endTime = lastEndTime = [...([...verse.lines].reverse()[0]).timings].reverse()[0].end+verse.onEndHideDelay;
                 events.add(endTime,'hidelyrics',{});
                 verseRange[1] = endTime;
             }
