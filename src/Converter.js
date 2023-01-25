@@ -96,6 +96,7 @@ function convertLine(line,forceStartCount){
 
     line.timings = lineData;
     line.legacy.forceStartCount = forceStartCount;
+    line.params.startCount = line.params.startCount || line.legacy.forceStartCount;
     return line;
 }
 
@@ -173,7 +174,8 @@ module.exports = class Converter{
         stringEvents = convertedResult.headers.useMsec
         ? CommandConverter.parseCommandWithStdDuration(commands,classifiedHeaders,!isMidi || opts.enableMsec)
         : CommandConverter.parseCommandWithPlaytimeDuration(commands,classifiedHeaders);
-
+        
+        let lyricLines = [];
         if(true){
             let first = true;
             let initialVerse = {
@@ -194,13 +196,16 @@ module.exports = class Converter{
 
             for(var event of stringEvents){
                 if(event instanceof LineSeparate){
-                    verse.lines.push(convertLine(line,forceStartCount));
+                    let convertedLine = convertLine(line,forceStartCount);
+                    verse.lines.push(convertedLine);
+                    lyricLines.push(convertedLine);
                     forceStartCount = event.forceStartCount;
                     line = cloneObject(initialLine);
                 }else if(event instanceof VerseSeparate){
                     first = true;
-                    verse.lines.push(convertLine(line,forceStartCount));
-                    line = cloneObject(initialLine);
+                    let convertedLine = convertLine(line,forceStartCount);
+                    verse.lines.push(convertedLine);
+                    lyricLines.push(convertedLine);line = cloneObject(initialLine);
                     verse.onEndHideDelay = event.hideDelay;
                     verses.push(verse);
                     verse = cloneObject(initialVerse);
@@ -215,13 +220,16 @@ module.exports = class Converter{
                 }else if(event instanceof TimingEvent){
                     if(first){
                         verse.startBPM = event.currentBPM;
+                        line.params.startCount = true;
                         first = false;
                     }
                     line.timings.push(event);
                 }
             }
             if(line.timings.length){
-                verse.lines.push(convertLine(line,forceStartCount));
+                let convertedLine = convertLine(line,forceStartCount);
+                verse.lines.push(convertedLine);
+                lyricLines.push(convertedLine);
                 line = cloneObject(initialLine);
             }
             
@@ -419,7 +427,7 @@ module.exports = class Converter{
             headers:classifiedHeaders,
             rawHeaders:headers,
             events:events.getAll(),
-            verseRanges,
+            verseRanges,lyricLines,
             debug:{
                 verses:verses,commands,bpmlist,bpmevents
             }
