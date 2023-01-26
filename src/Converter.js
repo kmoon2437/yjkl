@@ -20,28 +20,25 @@ function cloneObject(obj){
     return newobj;
 }
 
-function classifyHeader(headers){
-    var headers = cloneObject(headers);
-    var classified = {
-        files:{},
-        meta:{},
-        otherHeaders:null
-    };
+function classifyHeader(headers2){
+    let headers = cloneObject(headers2);
+    let files = {};
 
-    for(var i in headers){
+    for(let i in headers){
         if(i.match(/^file-/g)){
-            classified.files[i.replace(/(@?)file-/i,'')] = headers[i];
+            files[i.replace(/(@?)file-/i,'')] = headers[i];
             delete headers[i];
-        }
-        else if(i.match(/^meta-/g)){
-            classified.meta[i.replace('meta-','')] = headers[i];
+        }else if(i.match(/^meta-/g)){
+            // meta-로 시작하는 헤더의 meta- 부분을 없애서 새로 넣음
+            headers[i.replace('meta-','')] = headers[i];
             delete headers[i];
         }
     }
 
-    classified.otherHeaders = headers;
+    if(!files.audio && files.mr) files.audio = files.mr;
+    headers.files = files;
 
-    return classified;
+    return headers;
 }
 
 function convertLine(line,forceStartCount){
@@ -121,9 +118,9 @@ module.exports = class Converter{
         var events = new Events();
         var stringEvents = null;
         var verses = [];
-        classifiedHeaders.meta['ticks-per-beat'] = classifiedHeaders.meta['ticks-per-beat'] || 120;
+        classifiedHeaders['ticks-per-beat'] = classifiedHeaders['ticks-per-beat'] || 120;
 
-        classifiedHeaders.media = '';
+        /*classifiedHeaders.media = '';
         if(classifiedHeaders.files.yjk || classifiedHeaders.files.midi){
             if(classifiedHeaders.files.yjk){
                 classifiedHeaders.media += 'yjk';
@@ -137,14 +134,14 @@ module.exports = class Converter{
                 classifiedHeaders.media += 'only';
             }
         }else{
-            if(classifiedHeaders.files.mr && classifiedHeaders.files.mv){
-                classifiedHeaders.media = 'mr-mv';
-            }else if(classifiedHeaders.files.mr && !classifiedHeaders.files.mv){
-                classifiedHeaders.media = 'mr-only';
-            }else if(!classifiedHeaders.files.mr && classifiedHeaders.files.mv){
+            if(classifiedHeaders.files.audio && classifiedHeaders.files.mv){
+                classifiedHeaders.media = 'audio-mv';
+            }else if(classifiedHeaders.files.audio && !classifiedHeaders.files.mv){
+                classifiedHeaders.media = 'audio-only';
+            }else if(!classifiedHeaders.files.audio && classifiedHeaders.files.mv){
                 classifiedHeaders.media = 'mv-only';
             }
-        }
+        }*/
         
         // 결과 변수를 미리 만들어둠
         let convertedResult = {
@@ -154,8 +151,8 @@ module.exports = class Converter{
         
         /*convertedResult.headers.useMsec = !((classifiedHeaders.media.startsWith('midi')
         || classifiedHeaders.media.startsWith('yjk')) || classifiedHeaders.otherHeaders['tempo-changes']);*/
-        convertedResult.headers.useMsec = !(classifiedHeaders.otherHeaders['tempo-changes']);
-        let isMidi = (classifiedHeaders.media.startsWith('midi') || classifiedHeaders.media.startsWith('yjk'));
+        convertedResult.headers.useMsec = !(classifiedHeaders['tempo-changes']);
+        let isMidi = classifiedHeaders.files.midi;
 
         /*switch(classifiedHeaders.meta['timing-type']){
             case 'std-duration':{
@@ -243,11 +240,11 @@ module.exports = class Converter{
         // 예시:'0:110,3600:100,120:90,120:82,120:75,120:70,120:60,120:50,120:45,120:160'
         // 시간은 틱단위이며 가사파일 기준임(여기서 파싱을 하므로)
         let bpmlist = null,bpmevents = null;
-        if(classifiedHeaders.otherHeaders['tempo-changes'] && !convertedResult.headers.useMsec){
+        if(classifiedHeaders['tempo-changes'] && !convertedResult.headers.useMsec){
             //console.log(classifiedHeaders.otherHeaders['tempo-changes']);
             //console.log('progress A');
             convertedResult.headers.useMsec = true;
-            bpmlist = classifiedHeaders.otherHeaders['tempo-changes']
+            bpmlist = classifiedHeaders['tempo-changes']
             .split(',').map(a => a.split(':'))
             .map(a => ({ time:parseFloat(a[0]),bpm:parseFloat(a[1]) }));
             bpmevents = {};
@@ -259,7 +256,7 @@ module.exports = class Converter{
                 playtick += e.time;
                 bpmlist[i].time = playtick;
                 //if(!bpmevents[e.time]) bpmevents[e.time] = [];
-                playms += 60000/(bpmlist[i-1] ? bpmlist[i-1].bpm : 120)*(e.time/classifiedHeaders.meta['ticks-per-beat']);
+                playms += 60000/(bpmlist[i-1] ? bpmlist[i-1].bpm : 120)*(e.time/classifiedHeaders['ticks-per-beat']);
                 //bpmevents[e.time].push({ playms,bpm:e.bpm });
                 bpmlist[i].playms = playms;
             }
@@ -270,7 +267,7 @@ module.exports = class Converter{
                     if(g.time < val){
                         return Math.round(
                             ((val - g.time)
-                            / classifiedHeaders.meta['ticks-per-beat']
+                            / classifiedHeaders['ticks-per-beat']
                             * (60000/g.bpm)) + g.playms
                         );
                     }
@@ -343,7 +340,7 @@ module.exports = class Converter{
             }
             events.add(startTime,'countdown',{ val:null,lineCode:bottom ? LINE_2 : LINE_1 });
             
-            let tpb = classifiedHeaders.meta['ticks-per-beat'];
+            let tpb = classifiedHeaders['ticks-per-beat'];
             let initialMinus = 200;
             let minus = initialMinus;
             if(ganjuDuration > 25000 && first) minus = Math.min(6000,ganjuDuration/2);
@@ -418,8 +415,8 @@ module.exports = class Converter{
         events.add(Math.min(10000,firsteventtime),'cleangui',{},true);
         events.add(0,'hidelyrics',{},true);
 
-        if(classifiedHeaders.media == 'yjk-mv' || classifiedHeaders.media == 'midi-mv' || classifiedHeaders.media == 'mr-mv'){
-            let time = classifiedHeaders.otherHeaders['mv-timing'] || 0;
+        if(classifiedHeaders.media == 'yjk-mv' || classifiedHeaders.media == 'midi-mv' || classifiedHeaders.media == 'audio-mv'){
+            let time = classifiedHeaders['mv-timing'] || 0;
             events.add(time,'playmv',{},true);
         }
 

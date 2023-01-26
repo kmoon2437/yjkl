@@ -12,7 +12,7 @@ Music-tag:작곡자태그
 Origin-tag:원곡정보태그 // 곡정보 db저장시 Title부터 여기까지는 있어도 무시되므로 없어도 됨
 File-midi:미디반주파일
 File-midi:yjk반주파일
-File-mr:mr반주파일
+File-audio:mr반주파일
 File-mv:뮤비파일 // 반주없이 이것만 있으면 반주소리로 영상소리가 들어감
 File-album:앨범사진파일
 Meta-layout:숫자 // 비트연산자를 활용하므로 자세한건 문서 참고

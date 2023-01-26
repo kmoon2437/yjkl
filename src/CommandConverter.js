@@ -20,7 +20,7 @@ module.exports = class CommandConverter{
     static parseCommandWithStdDuration(commands,headers,enableMsec){
         var bpm = 120;
         var stringEvents = [];
-        var ticksPerBeat = headers.meta['ticks-per-beat'];
+        var ticksPerBeat = headers['ticks-per-beat'];
         var playtime = 0;
         for(var cmd of commands){
             switch(cmd.type.toLowerCase()){
